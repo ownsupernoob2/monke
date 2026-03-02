@@ -98,8 +98,24 @@ func disconnect_lobby() -> void:
 	if peer != null:
 		peer.close()
 		peer = null
+	_disconnect_multiplayer_signals()
 	multiplayer.multiplayer_peer = null
 	players.clear()
+
+
+## Safely disconnect all multiplayer signal handlers so re-joining is clean.
+func _disconnect_multiplayer_signals() -> void:
+	var mp := multiplayer
+	if mp.connected_to_server.is_connected(_on_connected):
+		mp.connected_to_server.disconnect(_on_connected)
+	if mp.connection_failed.is_connected(_on_failed):
+		mp.connection_failed.disconnect(_on_failed)
+	if mp.server_disconnected.is_connected(_on_server_disconnected):
+		mp.server_disconnected.disconnect(_on_server_disconnected)
+	if mp.peer_connected.is_connected(_on_peer_connected):
+		mp.peer_connected.disconnect(_on_peer_connected)
+	if mp.peer_disconnected.is_connected(_on_peer_disconnected):
+		mp.peer_disconnected.disconnect(_on_peer_disconnected)
 
 
 # ── EOS implementation ────────────────────────────────────────────────────────
@@ -133,6 +149,8 @@ func _host_lobby_eos() -> Error:
 	eos_peer.create_server(SOCKET_NAME)
 	peer = eos_peer
 	multiplayer.multiplayer_peer = peer
+	# Disconnect first in case of a previous failed host attempt.
+	_disconnect_multiplayer_signals()
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 
@@ -149,9 +167,18 @@ func _join_lobby_eos(lobby_id: String) -> Error:
 		push_error("Lobby: HLobbies autoload not found – can't join via EOS.")
 		return ERR_UNAVAILABLE
 
-	var lobby = await hlobbies.join_by_id_async(lobby_id)
+	# JoinLobbyById only works for integrated/console platforms.
+	# For cross-network PC play we must search by lobby ID first to get the
+	# lobby details handle, then join with that handle.
+	var results = await hlobbies.search_by_lobby_id_async(lobby_id)
+	if results == null or results.is_empty():
+		push_error("Lobby: EOS search_by_lobby_id_async found nothing for id: %s" % lobby_id)
+		connection_failed.emit()
+		return FAILED
+
+	var lobby = await hlobbies.join_async(results[0])
 	if lobby == null:
-		push_error("Lobby: EOS join_by_id_async failed for id: %s" % lobby_id)
+		push_error("Lobby: EOS join_async failed for id: %s" % lobby_id)
 		connection_failed.emit()
 		return FAILED
 
@@ -164,6 +191,8 @@ func _join_lobby_eos(lobby_id: String) -> Error:
 	eos_peer.create_client(SOCKET_NAME, host_puid)
 	peer = eos_peer
 	multiplayer.multiplayer_peer = peer
+	# Disconnect first in case of a previous failed join attempt.
+	_disconnect_multiplayer_signals()
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(_on_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
@@ -193,6 +222,7 @@ func _host_lobby_enet(port: int = DEFAULT_PORT) -> Error:
 	_using_eos = false
 	multiplayer.multiplayer_peer = peer
 	_register_self()
+	_disconnect_multiplayer_signals()
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	connected.emit()
@@ -209,6 +239,7 @@ func _join_lobby_enet(address: String = "127.0.0.1", port: int = DEFAULT_PORT) -
 	peer = enet_peer
 	_using_eos = false
 	multiplayer.multiplayer_peer = peer
+	_disconnect_multiplayer_signals()
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(_on_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
