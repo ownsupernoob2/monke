@@ -176,6 +176,15 @@ func _join_lobby_eos(lobby_id: String) -> Error:
 		connection_failed.emit()
 		return FAILED
 
+	# Read host PUID from the search result NOW — it's fully populated here.
+	# The HLobby returned by join_async uses init_from_id which may fail to
+	# copy lobby details if the EOS SDK cache hasn't updated yet (NotFound).
+	var host_puid : String = results[0].owner_product_user_id
+	if host_puid == "":
+		push_error("Lobby: could not determine host PUID from search result.")
+		connection_failed.emit()
+		return FAILED
+
 	var lobby = await hlobbies.join_async(results[0])
 	if lobby == null:
 		push_error("Lobby: EOS join_async failed for id: %s" % lobby_id)
@@ -185,7 +194,6 @@ func _join_lobby_eos(lobby_id: String) -> Error:
 	_hlobby = lobby
 	current_lobby_id = lobby_id
 	_using_eos = true
-	var host_puid : String = lobby.owner_product_user_id
 
 	var eos_peer = EOSGMultiplayerPeer.new()
 	eos_peer.create_client(SOCKET_NAME, host_puid)
