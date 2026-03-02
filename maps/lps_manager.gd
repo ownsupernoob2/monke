@@ -50,9 +50,9 @@ func _ready() -> void:
 			current_round = gs.lps_current_round
 
 	# Listen for players leaving mid-game.
-	if has_node("/root/Lobby"):
-		Lobby.player_left.connect(_on_peer_left)
-		Lobby.server_closed.connect(_on_server_closed)
+	if has_node("/root/GameLobby"):
+		GameLobby.player_left.connect(_on_peer_left)
+		GameLobby.server_closed.connect(_on_server_closed)
 
 	# Wait one frame so all Player nodes are spawned by main.gd.
 	await get_tree().process_frame
@@ -67,7 +67,7 @@ func _process(delta: float) -> void:
 	# ── Round timer ──────────────────────────────────────────────────────
 	if not _deathmatch_active:
 		_round_timer -= delta
-		if _round_timer <= 0.0 and Lobby.is_host():
+		if _round_timer <= 0.0 and GameLobby.is_host():
 			rpc("_rpc_start_deathmatch")
 			_rpc_start_deathmatch()
 		# Update HUD timer for local player.
@@ -89,13 +89,13 @@ func _process(delta: float) -> void:
 	# ── Deathmatch: rising lava ───────────────────────────────────
 	if _deathmatch_active:
 		# Raise the lava.
-		if Lobby.is_host():
+		if GameLobby.is_host():
 			_lava_rise_speed = minf(_lava_rise_speed + _LAVA_RISE_ACCEL * delta, _LAVA_RISE_MAX)
 			_kill_y += _lava_rise_speed * delta
 			# Broadcast new height to all clients (and update locally via call_local).
 			rpc("_rpc_sync_lava", _kill_y)
 		# Host kills players below the lava.
-		if Lobby.is_host():
+		if GameLobby.is_host():
 			var players_container : Node = get_parent().get_node_or_null("Players")
 			if players_container:
 				for child : Node in players_container.get_children():
@@ -173,7 +173,7 @@ func _on_player_died(peer_id : int) -> void:
 	if peer_id in _alive_peers:
 		_alive_peers.erase(peer_id)
 	# Host tracks death order for placement scoring.
-	if Lobby.is_host() and peer_id not in _death_order:
+	if GameLobby.is_host() and peer_id not in _death_order:
 		_death_order.append(peer_id)
 	_update_local_hud_alive()
 
@@ -186,7 +186,7 @@ func _on_player_died(peer_id : int) -> void:
 		_update_spectate_hud()
 
 	# Check for round end — only the host decides.
-	if Lobby.is_host() and _alive_peers.size() <= 1:
+	if GameLobby.is_host() and _alive_peers.size() <= 1:
 		var winner_id : int = _alive_peers[0] if _alive_peers.size() == 1 else -1
 		_award_round_points(winner_id)
 		rpc("_rpc_round_over", winner_id, _scores)
@@ -199,12 +199,12 @@ func _on_peer_left(peer_id: int) -> void:
 		_alive_peers.erase(peer_id)
 		_update_local_hud_alive()
 	# Host tracks death order.
-	if Lobby.is_host() and peer_id not in _death_order:
+	if GameLobby.is_host() and peer_id not in _death_order:
 		_death_order.append(peer_id)
 	# Refresh spectate targets.
 	_refresh_spectate_targets()
 	# Check round end.
-	if _round_active and Lobby.is_host() and _alive_peers.size() <= 1:
+	if _round_active and GameLobby.is_host() and _alive_peers.size() <= 1:
 		var winner_id : int = _alive_peers[0] if _alive_peers.size() == 1 else -1
 		_award_round_points(winner_id)
 		rpc("_rpc_round_over", winner_id, _scores)
@@ -728,4 +728,4 @@ func _hide_round_banner() -> void:
 # ══════════════════════════════════════════════════════════════════════════════
 
 func _peer_name(peer_id : int) -> String:
-	return Lobby.display_name(peer_id)
+	return GameLobby.display_name(peer_id)

@@ -49,6 +49,11 @@ func _spawn_local_player() -> void:
 		push_error("Main: 'player_scene' export is not assigned.")
 		return
 	var player : Player = player_scene.instantiate() as Player
+	if player == null:
+		push_error("Main: player_scene.instantiate() returned null – check Player.tscn.")
+		return
+	# Explicitly mark as local BEFORE add_child so _ready() sees is_local = true.
+	player.setup_network(true)
 	_players_node.add_child(player)
 	player.global_position = spawn_point.global_position
 	player.player_died.connect(_on_player_died.bind(0))
@@ -65,14 +70,14 @@ func _setup_multiplayer() -> void:
 		add_child(_chat)
 
 	# Spawn for every peer already in the lobby.
-	for peer_id : int in Lobby.players.keys():
+	for peer_id : int in GameLobby.players.keys():
 		_spawn_mp_player(peer_id)
 	# Late-joiners (shouldn't happen mid-game, but safe).
-	Lobby.player_joined.connect(func(_id : int, _n : String) -> void: _spawn_mp_player(_id))
-	Lobby.player_left.connect(_on_peer_left)
+	GameLobby.player_joined.connect(func(_id : int, _n : String) -> void: _spawn_mp_player(_id))
+	GameLobby.player_left.connect(_on_peer_left)
 
 	# Host-disconnect for clients.
-	Lobby.server_closed.connect(_on_server_closed)
+	GameLobby.server_closed.connect(_on_server_closed)
 
 	# Spawn gamemode manager if applicable.
 	_spawn_gamemode_manager()

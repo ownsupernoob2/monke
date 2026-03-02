@@ -1,7 +1,7 @@
 extends CanvasLayer
 
 ## In-game chat overlay.  Press T to open, Enter to send, Escape to cancel.
-## Listens to Lobby.chat_received for incoming messages.
+## Listens to GameLobby.chat_received for incoming messages.
 
 const MAX_MESSAGES     : int   = 50
 const INACTIVITY_FADE  : float = 10.0  ## seconds of inactivity before chat fades out
@@ -22,12 +22,12 @@ func _ready() -> void:
 	# Make panel semi-transparent when not typing.
 	panel.modulate.a = 0.4
 
-	if has_node("/root/Lobby"):
-		var lobby : Node = get_node("/root/Lobby")
-		lobby.chat_received.connect(_on_chat_received)
-		lobby.server_closed.connect(_on_server_closed)
-		lobby.alert_received.connect(_on_alert_received)
-		lobby.player_joined.connect(_on_player_joined)
+	if has_node("/root/GameLobby"):
+		var lobby : Node = get_node("/root/GameLobby")
+		GameLobby.chat_received.connect(_on_chat_received)
+		GameLobby.server_closed.connect(_on_server_closed)
+		GameLobby.alert_received.connect(_on_alert_received)
+		GameLobby.player_joined.connect(_on_player_joined)
 
 	input_field.text_submitted.connect(_on_text_submitted)
 
@@ -91,13 +91,13 @@ func _should_capture_mouse() -> bool:
 func _on_text_submitted(text: String) -> void:
 	var msg := text.strip_edges()
 	# Host-only slash commands.
-	if msg.begins_with("/") and has_node("/root/Lobby") and Lobby.is_host():
+	if msg.begins_with("/") and has_node("/root/GameLobby") and GameLobby.is_host():
 		_handle_command(msg)
 		_close_chat()
 		return
-	if msg != "" and has_node("/root/Lobby"):
-		var lobby : Node = get_node("/root/Lobby")
-		lobby.send_chat(msg)
+	if msg != "" and has_node("/root/GameLobby"):
+		var lobby : Node = get_node("/root/GameLobby")
+		GameLobby.send_chat(msg)
 	_close_chat()
 
 
@@ -118,21 +118,21 @@ func _handle_command(cmd: String) -> void:
 				_add_alert("You cannot kick yourself.")
 				return
 			var is_ban := (command == "/ban")
-			var display := Lobby.display_name(pid)
+			var display := GameLobby.display_name(pid)
 			var action  := "banned" if is_ban else "kicked"
-			Lobby.send_alert("%s has been %s from the game." % [display, action])
+			GameLobby.send_alert("%s has been %s from the game." % [display, action])
 			if is_ban:
-				Lobby.ban_player(pid)
+				GameLobby.ban_player(pid)
 			else:
-				Lobby.kick_player(pid)
+				GameLobby.kick_player(pid)
 		_:
 			_add_alert("Unknown command: %s" % command)
 
 
 func _find_peer_by_name(name: String) -> int:
 	# Match against display_name so "Player2" correctly finds the renamed duplicate.
-	for id : int in Lobby.players:
-		if Lobby.display_name(id).to_lower() == name.to_lower():
+	for id : int in GameLobby.players:
+		if GameLobby.display_name(id).to_lower() == name.to_lower():
 			return id
 	return -1
 
@@ -146,7 +146,7 @@ func _on_player_joined(id: int, _p_name: String) -> void:
 	if id == multiplayer.get_unique_id():
 		return
 	# Use display_name so duplicate names show the (2), (3)… suffix.
-	var name_display := Lobby.display_name(id)
+	var name_display := GameLobby.display_name(id)
 	_add_message("", "%s joined the game." % name_display)
 
 

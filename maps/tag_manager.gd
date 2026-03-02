@@ -49,9 +49,9 @@ func _ready() -> void:
 			_total_scores = gs.lps_scores.duplicate()
 			current_round = gs.lps_current_round
 
-	if has_node("/root/Lobby"):
-		Lobby.player_left.connect(_on_peer_left)
-		Lobby.server_closed.connect(_on_server_closed)
+	if has_node("/root/GameLobby"):
+		GameLobby.player_left.connect(_on_peer_left)
+		GameLobby.server_closed.connect(_on_server_closed)
 
 	await get_tree().process_frame
 	_cache_local_player()
@@ -86,7 +86,7 @@ func _process(delta: float) -> void:
 	_score_tick += delta
 	if _score_tick >= 1.0:
 		_score_tick -= 1.0
-		if Lobby.is_host():
+		if GameLobby.is_host():
 			for pid : int in _alive_peers:
 				if pid != _it_peer:
 					_scores[pid] = _scores.get(pid, 0) + 1
@@ -94,13 +94,13 @@ func _process(delta: float) -> void:
 			_rpc_sync_scores(_scores)
 
 	# Proximity tag check — host authoritative.
-	if Lobby.is_host() and _it_peer >= 0 and _tag_cooldown <= 0.0:
+	if GameLobby.is_host() and _it_peer >= 0 and _tag_cooldown <= 0.0:
 		_check_tag_proximity()
 
 	# Round timer.
 	_round_timer -= delta
 	_update_hud_timer()
-	if _round_timer <= 0.0 and Lobby.is_host():
+	if _round_timer <= 0.0 and GameLobby.is_host():
 		_round_active = false
 		_end_round_by_timer()
 
@@ -147,7 +147,7 @@ func _start_round() -> void:
 				child.player_died.connect(_on_player_died.bind(pid))
 
 	# Host picks an IT player at random.
-	if Lobby.is_host() and _all_peer_ids.size() > 0:
+	if GameLobby.is_host() and _all_peer_ids.size() > 0:
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
 		var first_it : int = _all_peer_ids[rng.randi() % _all_peer_ids.size()]
@@ -193,8 +193,8 @@ func _rpc_set_it(peer_id: int) -> void:
 	var local_id  : int = multiplayer.get_unique_id()
 	if peer_id == local_id:
 		_show_announcement("You are IT! 🏃")
-	elif has_node("/root/Lobby"):
-		_show_announcement("%s is IT!" % Lobby.display_name(peer_id))
+	elif has_node("/root/GameLobby"):
+		_show_announcement("%s is IT!" % GameLobby.display_name(peer_id))
 	else:
 		_show_announcement("Player %d is IT!" % peer_id)
 	get_tree().create_timer(1.8).timeout.connect(_hide_announcement, CONNECT_ONE_SHOT)
@@ -215,7 +215,7 @@ func _rpc_sync_scores(scores: Dictionary) -> void:
 func _on_player_died(peer_id: int) -> void:
 	_alive_peers.erase(peer_id)
 	# If IT died, volunteer the first alive player.
-	if peer_id == _it_peer and _alive_peers.size() > 0 and Lobby.is_host():
+	if peer_id == _it_peer and _alive_peers.size() > 0 and GameLobby.is_host():
 		var new_it : int = _alive_peers[0]
 		rpc("_rpc_set_it", new_it)
 		_rpc_set_it(new_it)
@@ -230,7 +230,7 @@ func _on_peer_left(peer_id: int) -> void:
 	_all_peer_ids.erase(peer_id)
 	_scores.erase(peer_id)
 	_total_scores.erase(peer_id)
-	if peer_id == _it_peer and _alive_peers.size() > 0 and Lobby.is_host():
+	if peer_id == _it_peer and _alive_peers.size() > 0 and GameLobby.is_host():
 		var new_it : int = _alive_peers[0]
 		rpc("_rpc_set_it", new_it)
 		_rpc_set_it(new_it)
@@ -399,7 +399,7 @@ func _update_hud_scores() -> void:
 	pids.sort_custom(func(a, b): return _scores.get(a, 0) > _scores.get(b, 0))
 	for pid : int in pids:
 		var pts   : int    = _scores.get(pid, 0)
-		var pname : String = Lobby.display_name(pid) if has_node("/root/Lobby") else "P%d" % pid
+		var pname : String = GameLobby.display_name(pid) if has_node("/root/GameLobby") else "P%d" % pid
 		var it_mark : String = " ⚡" if pid == _it_peer else ""
 		var row := Label.new()
 		row.text = "%s%s — %ds" % [pname, it_mark, pts]

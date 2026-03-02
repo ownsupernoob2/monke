@@ -22,7 +22,18 @@ config/icon="res://icon.svg"
 [autoload]
 
 GameSettings="*res://scripts/game_settings.gd"
-Lobby="*res://multiplayer/lobby.gd"
+GameLobby="*res://multiplayer/lobby.gd"
+EOSBootstrap="*res://multiplayer/eos_bootstrap.gd"
+EOSGRuntime="*uid://7saywdx0ipep"
+HPlatform="*uid://yl2muvqrdiud"
+HAuth="*uid://786t1jiowvvg"
+HAchievements="*uid://bis404dty5u5c"
+HFriends="*uid://uumqbey8ji5t"
+HStats="*uid://dbckdip83oone"
+HLeaderboards="*uid://b06khhf20mplm"
+HLobbies="*uid://6iqvm33q0tb1"
+HP2P="*uid://u6ae5fpm6l8q"
+HSessions="*uid://bieh2rxxahuu2"
 
 [display]
 
@@ -32,6 +43,10 @@ window/size/resizable=false
 [editor]
 
 run/main_run_args="player2"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/epic-online-services-godot/plugin.cfg")
 
 [input]
 

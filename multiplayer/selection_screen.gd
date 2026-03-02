@@ -103,12 +103,12 @@ func _ready() -> void:
 		add_child(chat_scene.instantiate())
 
 	# Host-disconnect.
-	Lobby.server_closed.connect(_on_server_closed)
+	GameLobby.server_closed.connect(_on_server_closed)
 
 	var gs : Node = get_node_or_null("/root/GameSettings")
 	var has_prior_rounds : bool = gs != null and gs.lps_match_active
 
-	if Lobby.is_host():
+	if GameLobby.is_host():
 		_randomise_offerings()
 		_apply_labels()
 
@@ -149,7 +149,7 @@ func _process(delta : float) -> void:
 		return
 	_phase_timer -= delta
 	timer_label.text = "%d" % maxi(ceili(_phase_timer), 0)
-	if _phase_timer <= 0.0 and Lobby.is_host():
+	if _phase_timer <= 0.0 and GameLobby.is_host():
 		_finalize_current_phase()
 
 
@@ -339,7 +339,7 @@ func _on_card_input(_cam : Node, event : InputEvent, _pos : Vector3,
 	_my_vote = idx
 	_show_my_selection(cards, idx)
 
-	if Lobby.is_host():
+	if GameLobby.is_host():
 		_handle_vote(multiplayer.get_unique_id(), idx)
 	else:
 		rpc_id(1, "_rpc_submit_vote", current_phase, idx)
@@ -376,7 +376,7 @@ func _reset_cards(cards : Array[Node3D]) -> void:
 
 @rpc("any_peer", "reliable")
 func _rpc_submit_vote(phase : int, card_idx : int) -> void:
-	if not Lobby.is_host():
+	if not GameLobby.is_host():
 		return
 	if phase != current_phase or _phase_decided:
 		return
@@ -393,7 +393,7 @@ func _handle_vote(peer_id : int, card_idx : int) -> void:
 	rpc("_rpc_broadcast_votes", current_phase, synced)
 	_update_vote_displays()
 	# If everyone has voted, finalize immediately.
-	if _current_votes.size() >= Lobby.players.size():
+	if _current_votes.size() >= GameLobby.players.size():
 		_finalize_current_phase()
 
 
@@ -433,7 +433,7 @@ func _update_vote_displays() -> void:
 		for pid : int in ids_per_card[i]:
 			var hue  : float  = fmod(float(abs(pid)) * 0.618, 1.0)
 			var col  : Color  = Color.from_hsv(hue, 0.75, 0.95)
-			var p_name : String = Lobby.display_name(pid)
+			var p_name : String = GameLobby.display_name(pid)
 
 			# Coloured square background (avatar placeholder).
 			var circle := ColorRect.new()
@@ -677,7 +677,7 @@ func _populate_leaderboard() -> void:
 		var hue   : float = fmod(float(abs(pid)) * 0.618, 1.0)
 		var col   : Color = Color.from_hsv(hue, 0.75, 0.90)
 		var pts   : int   = scores.get(pid, 0)
-		var pname : String = Lobby.display_name(pid)
+		var pname : String = GameLobby.display_name(pid)
 
 		var root := Node3D.new()
 		root.name = "Contestant%d" % i

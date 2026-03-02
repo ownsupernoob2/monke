@@ -68,6 +68,19 @@ layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "127.0.0.1"
 
+[node name="CodeRow" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="CodeLabel" type="Label" parent="VBox/CodeRow"]
+layout_mode = 2
+text = "Code:"
+custom_minimum_size = Vector2(48, 0)
+
+[node name="CodeEdit" type="LineEdit" parent="VBox/CodeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Paste room code here"
+
 [node name="HostBtn" type="Button" parent="VBox"]
 layout_mode = 2
 text = "Host Game"

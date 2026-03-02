@@ -248,8 +248,8 @@ func _create_puppet_body() -> void:
 	name_lbl.no_depth_test = true
 	name_lbl.render_priority = 1
 	name_lbl.modulate = Color.WHITE
-	if has_node("/root/Lobby"):
-		name_lbl.text = Lobby.display_name(peer_id)
+	if has_node("/root/GameLobby"):
+		name_lbl.text = GameLobby.display_name(peer_id)
 	else:
 		name_lbl.text = "Player %d" % peer_id
 	add_child(name_lbl)

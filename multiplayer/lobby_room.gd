@@ -9,10 +9,11 @@ extends Node3D
 @onready var count_label      : Label   = $UILayer/TopBar/CountLabel
 @onready var ip_label         : Label   = $UILayer/TopBar/IPLabel
 @onready var show_ip_btn      : Button  = $UILayer/TopBar/ShowIPBtn
+@onready var copy_code_btn    : Button  = $UILayer/TopBar/CopyCodeBtn
 @onready var rounds_spin      : SpinBox = $UILayer/BottomBar/RoundsSpinBox
 @onready var rounds_label     : Label   = $UILayer/BottomBar/RoundsLabel
 
-@onready var lobby : Node = get_node("/root/Lobby")
+@onready var lobby : Node = get_node("/root/GameLobby")
 
 var _public_ip  : String = ""
 var _lan_ip     : String = ""
@@ -44,11 +45,19 @@ func _ready() -> void:
 	rounds_spin.value = 3
 	rounds_spin.value_changed.connect(_on_rounds_changed)
 
-	# Show public IP so the host can share it for port-forwarded connections.
+	# Show public IP (ENet) or room code (EOS) so the host can share it.
 	_lan_ip = _get_local_ip()
-	ip_label.text = "IP: fetching…"
+	ip_label.text = "Code: fetching…"
 	show_ip_btn.pressed.connect(_on_toggle_ip)
-	_fetch_public_ip()
+	copy_code_btn.pressed.connect(_on_copy_code)
+
+	if lobby.eos_available():
+		# EOS mode – show/mask the room code.
+		_refresh_ip_label()
+	else:
+		# ENet mode – fetch public IP as before.
+		ip_label.text = "IP: fetching…"
+		_fetch_public_ip()
 
 	lobby.player_joined.connect(_on_player_joined)
 	lobby.player_left.connect(_on_player_left)
@@ -224,7 +233,36 @@ func _on_toggle_ip() -> void:
 	_refresh_ip_label()
 
 
+func _on_copy_code() -> void:
+	var code : String = lobby.current_lobby_id
+	if code.is_empty():
+		return
+	DisplayServer.clipboard_set(code)
+	var prev : String = copy_code_btn.text
+	copy_code_btn.text = "Copied!"
+	await get_tree().create_timer(1.8).timeout
+	copy_code_btn.text = prev
+
+
 func _refresh_ip_label() -> void:
+	# EOS mode – display the room code.
+	if lobby.eos_available():
+		var code : String = lobby.current_lobby_id
+		if code == "":
+			ip_label.text = "Code: (not hosting)"
+			show_ip_btn.text = "Show"
+			copy_code_btn.visible = false
+			return
+		copy_code_btn.visible = true
+		if _ip_visible:
+			ip_label.text = "Room code: %s" % code
+			show_ip_btn.text = "Hide"
+		else:
+			ip_label.text = "Room code: ●●●●●●"
+			show_ip_btn.text = "Show"
+		return
+
+	# ENet mode – display LAN / WAN IPs.
 	if _public_ip == "":
 		ip_label.text = "IP: fetching…"
 		show_ip_btn.text = "Show"

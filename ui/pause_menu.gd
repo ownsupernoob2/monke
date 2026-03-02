@@ -60,16 +60,16 @@ func _on_resume_pressed() -> void:
 func _on_back_to_menu_pressed() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	back_to_menu.emit()
-	if has_node("/root/Lobby"):
-		var lobby : Node = get_node("/root/Lobby")
+	if has_node("/root/GameLobby"):
+		var lobby : Node = get_node("/root/GameLobby")
 		lobby.disconnect_lobby()
 	get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
 
 
 func _on_exit_pressed() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	if has_node("/root/Lobby"):
-		var lobby : Node = get_node("/root/Lobby")
+	if has_node("/root/GameLobby"):
+		var lobby : Node = get_node("/root/GameLobby")
 		lobby.disconnect_lobby()
 	get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
 

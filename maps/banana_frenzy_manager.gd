@@ -47,9 +47,9 @@ func _ready() -> void:
 			_scores = gs.lps_scores.duplicate()
 			current_round = gs.lps_current_round
 
-	if has_node("/root/Lobby"):
-		Lobby.player_left.connect(_on_peer_left)
-		Lobby.server_closed.connect(_on_server_closed)
+	if has_node("/root/GameLobby"):
+		GameLobby.player_left.connect(_on_peer_left)
+		GameLobby.server_closed.connect(_on_server_closed)
 
 	await get_tree().process_frame
 	_cache_local_player()
@@ -92,7 +92,7 @@ func _process(delta: float) -> void:
 	# ── Round timer countdown (host drives end) ──────────────────────────
 	_round_timer -= delta
 	_update_hud_timer()
-	if _round_timer <= 0.0 and Lobby.is_host():
+	if _round_timer <= 0.0 and GameLobby.is_host():
 		_round_active = false
 		_end_round_by_timer()
 
@@ -169,7 +169,7 @@ func _on_child_added(node: Node) -> void:
 
 
 func _on_banana_picked_up(picker: Node3D, _amount: float) -> void:
-	if not _round_active or not Lobby.is_host():
+	if not _round_active or not GameLobby.is_host():
 		return
 	var pid : int = picker.get_multiplayer_authority()
 	if not _bf_points.has(pid):
@@ -224,7 +224,7 @@ func _on_peer_left(peer_id: int) -> void:
 	_all_peer_ids.erase(peer_id)
 	_bf_points.erase(peer_id)
 	_scores.erase(peer_id)
-	if Lobby.is_host() and _round_active:
+	if GameLobby.is_host() and _round_active:
 		rpc("_rpc_update_scores", _bf_points)
 		_rpc_update_scores(_bf_points)
 	_refresh_spectate_targets()
@@ -356,7 +356,7 @@ func _update_hud_scores() -> void:
 	for i : int in pids.size():
 		var pid   : int    = pids[i]
 		var pts   : int    = _bf_points.get(pid, 0)
-		var pname : String = Lobby.display_name(pid)
+		var pname : String = GameLobby.display_name(pid)
 		var medal : String = medals[i] if i < medals.size() else "  "
 		var row   := Label.new()
 		row.text = "%s %s — %d" % [medal, pname, pts]
@@ -501,7 +501,7 @@ func _update_spectate_hud() -> void:
 		return
 	_spectate_index = clampi(_spectate_index, 0, _spectate_targets.size() - 1)
 	var target : Player = _spectate_targets[_spectate_index]
-	_local_player.hud.show_spectating(Lobby.display_name(target.get_multiplayer_authority()))
+	_local_player.hud.show_spectating(GameLobby.display_name(target.get_multiplayer_authority()))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

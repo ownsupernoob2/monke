@@ -62,6 +62,14 @@ custom_minimum_size = Vector2(65, 30)
 text = "Show"
 theme_override_font_sizes/font_size = 14
 
+[node name="CopyCodeBtn" type="Button" parent="UILayer/TopBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(75, 30)
+text = "Copy Code"
+tooltip_text = "Copy room code to clipboard"
+theme_override_font_sizes/font_size = 14
+visible = false
+
 [node name="BottomBar" type="HBoxContainer" parent="UILayer"]
 anchors_preset = 12
 anchor_top = 1.0

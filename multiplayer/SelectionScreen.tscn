@@ -1,9 +1,9 @@
 [gd_scene format=3 uid="uid://c03ubts3uga8r"]
 
 [ext_resource type="Script" uid="uid://dcp4eb8b8usw5" path="res://multiplayer/selection_screen.gd" id="1"]
-[ext_resource type="PackedScene" path="res://multiplayer/CardUIGM.tscn" id="2"]
-[ext_resource type="PackedScene" path="res://multiplayer/CardUIMap.tscn" id="3"]
-[ext_resource type="PackedScene" path="res://multiplayer/CardUIBuff.tscn" id="4"]
+[ext_resource type="PackedScene" uid="uid://cardui0gmode1" path="res://multiplayer/CardUIGM.tscn" id="2"]
+[ext_resource type="PackedScene" uid="uid://cardui0map001" path="res://multiplayer/CardUIMap.tscn" id="3"]
+[ext_resource type="PackedScene" uid="uid://cardui0buff1" path="res://multiplayer/CardUIBuff.tscn" id="4"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -134,9 +134,8 @@ viewport_path = NodePath("Stations/GamemodeStation/Card1/CardVP")
 
 [sub_resource type="StandardMaterial3D" id="mat_gm1"]
 resource_local_to_scene = true
-cull_mode = 0
-uv1_scale = Vector3(-1, 1, 1)
 albedo_texture = SubResource("vptex_gm1")
+uv1_scale = Vector3(-1, 1, 1)
 
 [sub_resource type="BoxShape3D" id="card_shape"]
 size = Vector3(2, 2.8, 0.12)
@@ -146,72 +145,64 @@ viewport_path = NodePath("Stations/GamemodeStation/Card2/CardVP")
 
 [sub_resource type="StandardMaterial3D" id="mat_gm2"]
 resource_local_to_scene = true
-cull_mode = 0
-uv1_scale = Vector3(-1, 1, 1)
 albedo_texture = SubResource("vptex_gm2")
+uv1_scale = Vector3(-1, 1, 1)
 
 [sub_resource type="ViewportTexture" id="vptex_gm3"]
 viewport_path = NodePath("Stations/GamemodeStation/Card3/CardVP")
 
 [sub_resource type="StandardMaterial3D" id="mat_gm3"]
 resource_local_to_scene = true
-cull_mode = 0
-uv1_scale = Vector3(-1, 1, 1)
 albedo_texture = SubResource("vptex_gm3")
+uv1_scale = Vector3(-1, 1, 1)
 
 [sub_resource type="ViewportTexture" id="ViewportTexture_l87an"]
 viewport_path = NodePath("Stations/MapStation/Card1/CardVP")
 
 [sub_resource type="StandardMaterial3D" id="mat_map1"]
 resource_local_to_scene = true
-cull_mode = 0
-uv1_scale = Vector3(-1, 1, 1)
 albedo_texture = SubResource("ViewportTexture_l87an")
+uv1_scale = Vector3(-1, 1, 1)
 
 [sub_resource type="ViewportTexture" id="ViewportTexture_cbfxo"]
 viewport_path = NodePath("Stations/MapStation/Card2/CardVP")
 
 [sub_resource type="StandardMaterial3D" id="mat_map2"]
 resource_local_to_scene = true
-cull_mode = 0
-uv1_scale = Vector3(-1, 1, 1)
 albedo_texture = SubResource("ViewportTexture_cbfxo")
+uv1_scale = Vector3(-1, 1, 1)
 
 [sub_resource type="ViewportTexture" id="ViewportTexture_kg6bb"]
 viewport_path = NodePath("Stations/MapStation/Card3/CardVP")
 
 [sub_resource type="StandardMaterial3D" id="mat_map3"]
 resource_local_to_scene = true
-cull_mode = 0
-uv1_scale = Vector3(-1, 1, 1)
 albedo_texture = SubResource("ViewportTexture_kg6bb")
+uv1_scale = Vector3(-1, 1, 1)
 
 [sub_resource type="ViewportTexture" id="vptex_buf1"]
 viewport_path = NodePath("Stations/BuffStation/Card1/CardVP")
 
 [sub_resource type="StandardMaterial3D" id="mat_buf1"]
 resource_local_to_scene = true
-cull_mode = 0
-uv1_scale = Vector3(-1, 1, 1)
 albedo_texture = SubResource("vptex_buf1")
+uv1_scale = Vector3(-1, 1, 1)
 
 [sub_resource type="ViewportTexture" id="vptex_buf2"]
 viewport_path = NodePath("Stations/BuffStation/Card2/CardVP")
 
 [sub_resource type="StandardMaterial3D" id="mat_buf2"]
 resource_local_to_scene = true
-cull_mode = 0
-uv1_scale = Vector3(-1, 1, 1)
 albedo_texture = SubResource("vptex_buf2")
+uv1_scale = Vector3(-1, 1, 1)
 
 [sub_resource type="ViewportTexture" id="vptex_buf3"]
 viewport_path = NodePath("Stations/BuffStation/Card3/CardVP")
 
 [sub_resource type="StandardMaterial3D" id="mat_buf3"]
 resource_local_to_scene = true
-cull_mode = 0
-uv1_scale = Vector3(-1, 1, 1)
 albedo_texture = SubResource("vptex_buf3")
+uv1_scale = Vector3(-1, 1, 1)
 
 [node name="SelectionScreen" type="Node3D" unique_id=502117735]
 script = ExtResource("1")
