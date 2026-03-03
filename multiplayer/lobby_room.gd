@@ -102,11 +102,9 @@ func _spawn_capsule(id: int, p_name: String) -> void:
 	cap_shape.height = 1.3
 	shape.shape = cap_shape
 	area.add_child(shape)
-	area.mouse_entered.connect(_show_name.bind(root))
-	area.mouse_exited.connect(_hide_name.bind(root))
 	root.add_child(area)
 
-	# ── Name label (hidden until hover) ──
+	# ── Name label (always visible) ──
 	var label := Label3D.new()
 	label.name = "NameLabel"
 	label.text = p_name
@@ -114,7 +112,7 @@ func _spawn_capsule(id: int, p_name: String) -> void:
 	label.font_size = 36
 	label.outline_size = 6
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.visible = false
+	label.visible = true
 	root.add_child(label)
 
 	# ── Position: space players along X ──
@@ -138,16 +136,6 @@ func _reposition_capsules() -> void:
 	for child : Node in player_container.get_children():
 		child.position.x = i * 1.6 - 3.2
 		i += 1
-
-
-func _show_name(capsule: Node3D) -> void:
-	var label : Label3D = capsule.get_node("NameLabel")
-	label.visible = true
-
-
-func _hide_name(capsule: Node3D) -> void:
-	var label : Label3D = capsule.get_node("NameLabel")
-	label.visible = false
 
 
 func _update_count() -> void:

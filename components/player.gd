@@ -67,7 +67,6 @@ const GRAVITY           := 9.8
 # ── Multiplayer state ─────────────────────────────────────────────────────────
 ## True = this is the local player (gets camera/input). False = network puppet.
 var is_local    : bool  = true
-var _puppet_body : MeshInstance3D = null  # visible capsule for remote players
 var _net_pos    : Vector3 = Vector3.ZERO  # target pos from authority
 var _net_rot_y  : float   = 0.0          # target Y rotation
 var _net_head_x : float   = 0.0          # target head pitch
@@ -153,6 +152,7 @@ signal speed_changed(speed: float)
 @onready var vine_ray           : ShapeCast3D = $Head/VineRay
 @onready var left_hand          : Hand        = $Head/LeftHand
 @onready var right_hand         : Hand        = $Head/RightHand
+@onready var torso              : MeshInstance3D = $Torso
 
 
 func _ready() -> void:
@@ -161,9 +161,8 @@ func _ready() -> void:
 	if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
 		is_local = is_multiplayer_authority()
 
-	# Build the visible puppet body (capsule mesh) for ALL players.
-	# Local player's mesh will be hidden; remote player's mesh is visible.
-	_create_puppet_body()
+	# Create the floating name label shown above every player.
+	_create_name_label()
 
 	if not is_local:
 		# This is a remote puppet — remove input, camera, HUD, raycasts entirely.
@@ -178,7 +177,6 @@ func _ready() -> void:
 		vine_ray.enabled = false
 		hunger_death_timer.queue_free()
 		_hunger_enabled = false
-		_puppet_body.visible = true
 		return
 
 	# ── Local player setup ──
@@ -187,7 +185,7 @@ func _ready() -> void:
 		get_node("NameLabel3D").visible = false
 	camera.make_current()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	_puppet_body.visible = false  # don't render own body from first person
+	torso.visible = false  # first-person: don't render own body
 
 	# Apply FOV from GameSettings.
 	if has_node("/root/GameSettings"):
@@ -221,24 +219,9 @@ func setup_network(local : bool) -> void:
 	is_local = local
 
 
-## Builds a capsule mesh child so other players can see this player.
-func _create_puppet_body() -> void:
-	_puppet_body = MeshInstance3D.new()
-	_puppet_body.name = "PuppetBody"
-	var cap := CapsuleMesh.new()
-	cap.radius = 0.35
-	cap.height = 1.6
-	var mat := StandardMaterial3D.new()
-	# Give each peer a deterministic colour based on their authority ID.
+## Creates the floating name label shown above this player.
+func _create_name_label() -> void:
 	var peer_id : int = get_multiplayer_authority()
-	var hue : float = fmod(float(abs(peer_id)) * 0.618, 1.0)
-	mat.albedo_color = Color.from_hsv(hue, 0.7, 0.9)
-	_puppet_body.mesh = cap
-	_puppet_body.material_override = mat
-	_puppet_body.position = Vector3(0.0, 0.8, 0.0)  # centre of capsule
-	add_child(_puppet_body)
-
-	# ── Name label (visible to other players; hidden for local in _ready) ──
 	var name_lbl := Label3D.new()
 	name_lbl.name = "NameLabel3D"
 	name_lbl.position = Vector3(0.0, 2.0, 0.0)
@@ -419,9 +402,13 @@ func _process(delta: float) -> void:
 	if is_dead:
 		return
 
-	# Send our position to all other peers every frame.
+	# Send our position and hand state to all other peers every frame.
 	if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
-		rpc("_rpc_sync_transform", global_position, rotation.y, head.rotation.x)
+		var _l_grab := left_hand_state == HandState.GRABBING
+		var _r_grab := right_hand_state == HandState.GRABBING
+		rpc("_rpc_sync_transform", global_position, rotation.y, head.rotation.x,
+			_l_grab, left_hand._grab_world if _l_grab else Vector3.ZERO,
+			_r_grab, right_hand._grab_world if _r_grab else Vector3.ZERO)
 
 	_tick_hunger(delta)
 	# Stream live countdown to HUD every frame while the timer is running.
@@ -906,11 +893,10 @@ func die() -> void:
 	# Hide everything visible on this player.
 	if head:
 		head.visible = false
+	torso.visible = false
 	var name_lbl := get_node_or_null("NameLabel3D")
 	if name_lbl:
 		name_lbl.visible = false
-	if _puppet_body:
-		_puppet_body.visible = false
 	if is_local:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player_died.emit()
@@ -925,18 +911,31 @@ func _rpc_die() -> void:
 		is_dead = true
 		if head:
 			head.visible = false
+		torso.visible = false
 		var name_lbl := get_node_or_null("NameLabel3D")
 		if name_lbl:
 			name_lbl.visible = false
-		if _puppet_body:
-			_puppet_body.visible = false
 		player_died.emit()
 
 
 # ── Network transform sync ───────────────────────────────────────────────────
 
 @rpc("any_peer", "unreliable_ordered", "call_remote")
-func _rpc_sync_transform(pos : Vector3, rot_y : float, head_x : float) -> void:
+func _rpc_sync_transform(pos: Vector3, rot_y: float, head_x: float,
+		l_grab: bool, l_grab_pos: Vector3, r_grab: bool, r_grab_pos: Vector3) -> void:
 	_net_pos    = pos
 	_net_rot_y  = rot_y
 	_net_head_x = head_x
+	# Sync hand grab state so remote arms visually reach toward the vine.
+	if l_grab:
+		left_hand.grab(l_grab_pos)
+		left_hand_state = HandState.GRABBING
+	elif left_hand_state == HandState.GRABBING:
+		left_hand.release()
+		left_hand_state = HandState.FREE
+	if r_grab:
+		right_hand.grab(r_grab_pos)
+		right_hand_state = HandState.GRABBING
+	elif right_hand_state == HandState.GRABBING:
+		right_hand.release()
+		right_hand_state = HandState.FREE
