@@ -3,7 +3,7 @@ extends Node3D
 ## Interactive tutorial — teaches core mechanics step by step.
 ## Spawns a small arena with platforms, vines, and bananas, then
 ## guides the player through each mechanic with on-screen prompts.
-## INFO steps require SPACE to continue; interactive steps auto-detect.
+## INFO_WELCOME requires SPACE; other info steps auto-advance after a few seconds.
 
 const PLAYER_SCENE := "res://components/Player.tscn"
 
@@ -24,19 +24,24 @@ enum Step {
 	SHIFT_LOCK,
 	INFO_HUNGER,
 	EAT_BANANA,
-	THROW_POO,
 	OBSTACLE_COURSE,
 	COMPLETE,
 }
 
-# Steps that only show text and advance with SPACE.
+# Only the welcome step requires SPACE to continue.
 const INFO_STEPS : Array[int] = [
 	Step.INFO_WELCOME,
+]
+
+# Info steps that auto-advance after a short read delay.
+const AUTO_INFO_STEPS : Array[int] = [
 	Step.INFO_PUSH,
 	Step.INFO_VINE,
 	Step.INFO_CAMERA,
 	Step.INFO_HUNGER,
 ]
+
+const INFO_AUTO_ADVANCE_TIME := 5.0
 
 const STEP_TEXT : Dictionary = {
 	Step.INFO_WELCOME:
@@ -50,16 +55,15 @@ const STEP_TEXT : Dictionary = {
 	Step.INFO_PUSH:
 		"Looking at a surface and clicking pushes you away from it.\n" \
 		+ "Click Left or Right mouse button to push with one hand.\n" \
-		+ "Click BOTH mouse buttons at the same time to push harder!\n\n" \
-		+ "[Press SPACE to continue]",
+		+ "Click BOTH mouse buttons at the same time to push harder!",
 	Step.PUSH_SURFACE:
-		"Try it! Look at the platform surface and click to push yourself off!",
+		"Look at the platform surface below you and click to push yourself up!\n" \
+		+ "Then quickly grab a vine!",
 	Step.INFO_VINE:
 		"See those vines hanging above?\n" \
 		+ "Look at one until the crosshair turns green,\n" \
 		+ "then HOLD a mouse button to grab it.\n" \
-		+ "Swing by looking in a direction, then release to launch!\n\n" \
-		+ "[Press SPACE to continue]",
+		+ "Swing by looking in a direction, then release to launch!",
 	Step.GRAB_VINE:
 		"Look at a vine and HOLD Left or Right Click to grab it.",
 	Step.SWING_AND_RELEASE:
@@ -72,18 +76,14 @@ const STEP_TEXT : Dictionary = {
 		+ "Alternate Left → Right → Left for combos!",
 	Step.INFO_CAMERA:
 		"Press Q to toggle third-person view.\n" \
-		+ "Press Q again to return to first-person.\n\n" \
-		+ "[Press SPACE to continue]",
+		+ "Press Q again to return to first-person.",
 	Step.SHIFT_LOCK:
 		"Try it! Press Q twice to toggle third-person and back.",
 	Step.INFO_HUNGER:
 		"Your monkey has a hunger bar that slowly drains.\n" \
-		+ "Bananas restore your hunger — find and eat one!\n\n" \
-		+ "[Press SPACE to continue]",
+		+ "Bananas restore your hunger — find and eat one!",
 	Step.EAT_BANANA:
 		"Find and touch a banana to eat it.\nBananas restore your hunger.",
-	Step.THROW_POO:
-		"Double-tap Left or Right Click quickly to\ncreate a poo. Click again to throw it!",
 	Step.OBSTACLE_COURSE:
 		"Complete the obstacle course!\nSwing across the platforms to reach the golden finish platform.",
 	Step.COMPLETE:
@@ -97,9 +97,12 @@ var _player       : Player = null
 var _look_total      : float = 0.0
 var _grabbed_vine    : bool  = false
 var _combo_reached   : bool  = false
-var _threw_poo       : bool  = false
-var _toggled_shift   : bool  = false
-var _initial_hunger  : float = 100.0
+var _toggled_shift    : bool  = false
+var _prev_shift_lock  : bool  = false
+var _initial_hunger   : float = 100.0
+
+# ── Step timing ─────────────────────────────────────────────────────────────
+var _info_timer       : float = 0.0
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 var _prompt_layer     : CanvasLayer   = null
@@ -107,6 +110,7 @@ var _prompt_label     : Label         = null
 var _step_label       : Label         = null
 var _skip_button      : Button        = null
 var _end_buttons      : HBoxContainer = null
+var _tip_label        : Label         = null
 
 
 func _ready() -> void:
@@ -140,6 +144,7 @@ func _spawn_player() -> void:
 func _hide_hunger_ui() -> void:
 	if not _player or not _player.hud:
 		return
+	_player.set_hunger_passive_drain(false)
 	_player.hud.hunger_bar.visible = false
 	_player.hud.hunger_label.visible = false
 
@@ -147,6 +152,7 @@ func _hide_hunger_ui() -> void:
 func _show_hunger_ui() -> void:
 	if not _player or not _player.hud:
 		return
+	_player.set_hunger_passive_drain(true)
 	_player.hud.hunger_bar.visible = true
 	_player.hud.hunger_label.visible = true
 
@@ -237,6 +243,32 @@ func _build_ui() -> void:
 	menu_btn.pressed.connect(_on_skip)
 	_end_buttons.add_child(menu_btn)
 
+	# Ground-reset tip (bottom-centre, hidden by default).
+	var tip_panel := PanelContainer.new()
+	tip_panel.anchors_preset = Control.PRESET_CENTER_BOTTOM
+	tip_panel.anchor_left   = 0.5
+	tip_panel.anchor_right  = 0.5
+	tip_panel.anchor_top    = 1.0
+	tip_panel.anchor_bottom = 1.0
+	tip_panel.offset_left   = -160
+	tip_panel.offset_right  = 160
+	tip_panel.offset_top    = -70
+	tip_panel.offset_bottom = -20
+	var tip_style := StyleBoxFlat.new()
+	tip_style.bg_color = Color(0.0, 0.0, 0.0, 0.55)
+	tip_style.set_corner_radius_all(8)
+	tip_style.set_content_margin_all(10)
+	tip_panel.add_theme_stylebox_override("panel", tip_style)
+	tip_panel.visible = false
+	_prompt_layer.add_child(tip_panel)
+	_tip_label = Label.new()
+	_tip_label.text = "Press R to reset position"
+	_tip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tip_label.add_theme_font_size_override("font_size", 15)
+	_tip_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5, 0.9))
+	tip_panel.add_child(_tip_label)
+	# Keep a reference to the panel via the label's parent.
+
 	# Pause menu (Escape key).
 	var pause_scene := load("res://ui/PauseMenu.tscn")
 	if pause_scene:
@@ -271,14 +303,25 @@ func _show_step() -> void:
 	if _current_step == Step.INFO_HUNGER:
 		_enable_hunger()
 
+	# Start auto-advance timer for non-welcome info steps.
+	if _current_step in AUTO_INFO_STEPS:
+		_info_timer = INFO_AUTO_ADVANCE_TIME
+	else:
+		_info_timer = 0.0
+
+	# Sync shift-lock baseline so stale state doesn't immediately advance the step.
+	if _current_step == Step.SHIFT_LOCK:
+		_toggled_shift = false
+		if is_instance_valid(_player):
+			_prev_shift_lock = _player._shift_lock
+
 
 func _enable_hunger() -> void:
 	if not is_instance_valid(_player):
 		return
 	_player.hunger = 60.0
 	_initial_hunger = 60.0
-	_player.set_hunger_passive_drain(true)
-	_show_hunger_ui()
+	_show_hunger_ui()  # also enables passive drain
 
 
 func _advance_step() -> void:
@@ -309,16 +352,23 @@ func _input(event: InputEvent) -> void:
 		if _look_total > 600.0:
 			_advance_step()
 
-	if _current_step == Step.SHIFT_LOCK and event.is_action_pressed("shift_lock"):
-		if not _toggled_shift:
-			_toggled_shift = true
-		else:
-			_advance_step()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not is_instance_valid(_player) or _player.is_dead:
 		return
+
+	# Auto-advance timed info steps.
+	if _current_step in AUTO_INFO_STEPS:
+		_info_timer -= delta
+		if _info_timer <= 0.0:
+			_advance_step()
+			return
+
+	# Ground-reset tip: show when on the floor at ground level.
+	var on_ground := _player.is_on_floor() and _player.global_position.y < 2.5
+	if is_instance_valid(_tip_label) and _tip_label.get_parent():
+		_tip_label.get_parent().visible = on_ground and _current_step != Step.COMPLETE
 
 	match _current_step:
 		Step.PUSH_SURFACE:
@@ -341,20 +391,21 @@ func _process(_delta: float) -> void:
 			if _player.is_on_floor() and _player.global_position.y > 4.0:
 				_advance_step()
 
+		Step.SHIFT_LOCK:
+			var cur_sl : bool = _player._shift_lock
+			if cur_sl != _prev_shift_lock:
+				_prev_shift_lock = cur_sl
+				if not _toggled_shift:
+					_toggled_shift = true
+				else:
+					_advance_step()
+
 		Step.COMBO_SWING:
 			pass  # handled by signal
 
 		Step.EAT_BANANA:
 			if _player.hunger > _initial_hunger:
 				_initial_hunger = _player.hunger
-				_advance_step()
-
-		Step.THROW_POO:
-			if _player.left_hand_state == Player.HandState.HOLDING_POO \
-					or _player.right_hand_state == Player.HandState.HOLDING_POO:
-				_threw_poo = true
-			elif _threw_poo and _player.left_hand_state == Player.HandState.FREE \
-					and _player.right_hand_state == Player.HandState.FREE:
 				_advance_step()
 
 		Step.OBSTACLE_COURSE:

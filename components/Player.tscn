@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" path="res://ui/HUD.tscn" id="4"]
 [ext_resource type="PackedScene" path="res://components/Poo.tscn" id="5"]
 [ext_resource type="PackedScene" path="res://ui/PauseMenu.tscn" id="6"]
-[ext_resource type="Texture2D" uid="uid://jp4wu16arrqs" path="res://models/monke_texture.png" id="6_ir5jg"]
+[ext_resource type="Texture2D" uid="uid://cltwjy4e0klqe" path="res://models/monke_texture.png" id="6_ir5jg"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 height = 1.4263184
@@ -54,6 +54,7 @@ shadow_mesh = SubResource("ArrayMesh_uq3y5")
 
 [node name="Player" type="CharacterBody3D" unique_id=284059570]
 script = ExtResource("1")
+swing_launch_speed = 12.5
 combo_speed_bonus = 0.09
 poo_scene = ExtResource("5")
 poo_hunger_cost = 5.0

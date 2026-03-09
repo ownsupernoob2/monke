@@ -1,222 +1,222 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene format=3 uid="uid://dd7dkqw8sy67x"]
 
-[ext_resource type="Script" path="res://ui/tutorial.gd" id="1"]
-[ext_resource type="PackedScene" path="res://components/Vine.tscn" id="vine"]
+[ext_resource type="Script" uid="uid://0r2ftr00thyu" path="res://ui/tutorial.gd" id="1"]
 [ext_resource type="PackedScene" path="res://components/Banana.tscn" id="banana"]
+[ext_resource type="PackedScene" path="res://components/Vine.tscn" id="vine"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
 background_color = Color(0.45, 0.65, 0.85, 1)
-ambient_light_color = Color(0.9, 0.95, 1.0, 1)
+ambient_light_color = Color(0.9, 0.95, 1, 1)
 ambient_light_energy = 0.6
 
 [sub_resource type="BoxMesh" id="ground_mesh"]
 size = Vector3(120, 1, 60)
 
-[sub_resource type="BoxShape3D" id="ground_shape"]
-size = Vector3(120, 1, 60)
-
 [sub_resource type="StandardMaterial3D" id="ground_mat"]
 albedo_color = Color(0.25, 0.45, 0.15, 1)
 
-[sub_resource type="BoxMesh" id="plat5_mesh"]
-size = Vector3(5, 0.5, 5)
+[sub_resource type="BoxShape3D" id="ground_shape"]
+size = Vector3(120, 1, 60)
 
-[sub_resource type="BoxShape3D" id="plat5_shape"]
+[sub_resource type="BoxMesh" id="plat5_mesh"]
 size = Vector3(5, 0.5, 5)
 
 [sub_resource type="StandardMaterial3D" id="spawn_mat"]
 albedo_color = Color(0.4, 0.55, 0.25, 1)
 
-[sub_resource type="BoxMesh" id="target_mesh"]
-size = Vector3(4, 0.5, 4)
+[sub_resource type="BoxShape3D" id="plat5_shape"]
+size = Vector3(5, 0.5, 5)
 
-[sub_resource type="BoxShape3D" id="target_shape"]
+[sub_resource type="BoxMesh" id="target_mesh"]
 size = Vector3(4, 0.5, 4)
 
 [sub_resource type="StandardMaterial3D" id="target_mat"]
 albedo_color = Color(0.35, 0.5, 0.2, 1)
 
-[sub_resource type="BoxMesh" id="obstacle_mesh"]
-size = Vector3(3, 0.5, 3)
+[sub_resource type="BoxShape3D" id="target_shape"]
+size = Vector3(4, 0.5, 4)
 
-[sub_resource type="BoxShape3D" id="obstacle_shape"]
+[sub_resource type="BoxMesh" id="obstacle_mesh"]
 size = Vector3(3, 0.5, 3)
 
 [sub_resource type="StandardMaterial3D" id="obstacle_mat"]
 albedo_color = Color(0.3, 0.45, 0.2, 1)
 
+[sub_resource type="BoxShape3D" id="obstacle_shape"]
+size = Vector3(3, 0.5, 3)
+
 [sub_resource type="StandardMaterial3D" id="finish_mat"]
 albedo_color = Color(0.85, 0.7, 0.1, 1)
 
-[node name="Tutorial" type="Node3D"]
+[node name="Tutorial" type="Node3D" unique_id=1595335817]
 script = ExtResource("1")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1964701909]
 environment = SubResource("env")
 
-[node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.707, -0.707, 0, 0.707, 0.707, 0, 0, 0)
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1587016029]
+transform = Transform3D(1, 0, 0, 0, -0.038335443, 0.99926496, 0, -0.99926496, -0.038335443, -1.0788116, 23.073359, -0.7036724)
 light_energy = 1.2
 shadow_enabled = true
 
-[node name="Ground" type="StaticBody3D" parent="."]
+[node name="Ground" type="StaticBody3D" parent="." unique_id=1799859]
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Ground"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Ground" unique_id=742926230]
 mesh = SubResource("ground_mesh")
 surface_material_override/0 = SubResource("ground_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground" unique_id=1828663741]
 shape = SubResource("ground_shape")
 
-[node name="SpawnPlatform" type="StaticBody3D" parent="."]
+[node name="SpawnPlatform" type="StaticBody3D" parent="." unique_id=1462117293]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 0)
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="SpawnPlatform"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="SpawnPlatform" unique_id=2135081162]
 mesh = SubResource("plat5_mesh")
 surface_material_override/0 = SubResource("spawn_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="SpawnPlatform"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="SpawnPlatform" unique_id=1360737730]
 shape = SubResource("plat5_shape")
 
-[node name="TargetPlatform1" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 5, 0)
+[node name="TargetPlatform1" type="StaticBody3D" parent="." unique_id=603564769]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 3.9127936, 0)
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="TargetPlatform1"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TargetPlatform1" unique_id=2062482706]
 mesh = SubResource("target_mesh")
 surface_material_override/0 = SubResource("target_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="TargetPlatform1"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TargetPlatform1" unique_id=1943906468]
 shape = SubResource("target_shape")
 
-[node name="TargetPlatform2" type="StaticBody3D" parent="."]
+[node name="TargetPlatform2" type="StaticBody3D" parent="." unique_id=957569308]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 5, 4)
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="TargetPlatform2"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TargetPlatform2" unique_id=1928169622]
 mesh = SubResource("target_mesh")
 surface_material_override/0 = SubResource("target_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="TargetPlatform2"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TargetPlatform2" unique_id=1499574142]
 shape = SubResource("target_shape")
 
-[node name="TargetPlatform3" type="StaticBody3D" parent="."]
+[node name="TargetPlatform3" type="StaticBody3D" parent="." unique_id=2051671158]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -10)
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="TargetPlatform3"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TargetPlatform3" unique_id=1064982138]
 mesh = SubResource("target_mesh")
 surface_material_override/0 = SubResource("target_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="TargetPlatform3"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TargetPlatform3" unique_id=801282382]
 shape = SubResource("target_shape")
 
-[node name="TargetPlatform4" type="StaticBody3D" parent="."]
+[node name="TargetPlatform4" type="StaticBody3D" parent="." unique_id=543069167]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 5, 0)
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="TargetPlatform4"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TargetPlatform4" unique_id=551214461]
 mesh = SubResource("target_mesh")
 surface_material_override/0 = SubResource("target_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="TargetPlatform4"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TargetPlatform4" unique_id=2078889720]
 shape = SubResource("target_shape")
 
-[node name="Vine1" parent="." instance=ExtResource("vine")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 12, 0)
+[node name="Vine1" parent="." unique_id=1564255132 instance=ExtResource("vine")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.0073948, 10.644039, 0)
 
-[node name="Vine2" parent="." instance=ExtResource("vine")]
+[node name="Vine2" parent="." unique_id=2045811970 instance=ExtResource("vine")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 12, 2)
 
-[node name="Vine3" parent="." instance=ExtResource("vine")]
+[node name="Vine3" parent="." unique_id=2007894295 instance=ExtResource("vine")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 12, 0)
 
-[node name="Vine4" parent="." instance=ExtResource("vine")]
+[node name="Vine4" parent="." unique_id=894607912 instance=ExtResource("vine")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 12, -5)
 
-[node name="Vine5" parent="." instance=ExtResource("vine")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 12, -5)
+[node name="Vine5" parent="." unique_id=1388847075 instance=ExtResource("vine")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.9738264, 12, 0.7647979)
 
-[node name="Vine6" parent="." instance=ExtResource("vine")]
+[node name="Vine6" parent="." unique_id=1691184415 instance=ExtResource("vine")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 12, -5)
 
-[node name="Banana1" parent="." instance=ExtResource("banana")]
+[node name="Banana1" parent="." unique_id=1770943175 instance=ExtResource("banana")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6.5, 0)
 
-[node name="Banana2" parent="." instance=ExtResource("banana")]
+[node name="Banana2" parent="." unique_id=866388801 instance=ExtResource("banana")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 6.5, 4)
 
-[node name="Banana3" parent="." instance=ExtResource("banana")]
+[node name="Banana3" parent="." unique_id=177665101 instance=ExtResource("banana")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 6.5, 0)
 
-[node name="ObstaclePlatform1" type="StaticBody3D" parent="."]
+[node name="ObstaclePlatform1" type="StaticBody3D" parent="." unique_id=1873057647]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26, 6, 0)
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="ObstaclePlatform1"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="ObstaclePlatform1" unique_id=1106371727]
 mesh = SubResource("obstacle_mesh")
 surface_material_override/0 = SubResource("obstacle_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="ObstaclePlatform1"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ObstaclePlatform1" unique_id=175607034]
 shape = SubResource("obstacle_shape")
 
-[node name="ObstaclePlatform2" type="StaticBody3D" parent="."]
+[node name="ObstaclePlatform2" type="StaticBody3D" parent="." unique_id=612597955]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 36, 7, 2)
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="ObstaclePlatform2"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="ObstaclePlatform2" unique_id=2064208974]
 mesh = SubResource("obstacle_mesh")
 surface_material_override/0 = SubResource("obstacle_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="ObstaclePlatform2"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ObstaclePlatform2" unique_id=1666973505]
 shape = SubResource("obstacle_shape")
 
-[node name="ObstaclePlatform3" type="StaticBody3D" parent="."]
+[node name="ObstaclePlatform3" type="StaticBody3D" parent="." unique_id=489874209]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 46, 8, -1)
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="ObstaclePlatform3"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="ObstaclePlatform3" unique_id=240144588]
 mesh = SubResource("obstacle_mesh")
 surface_material_override/0 = SubResource("obstacle_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="ObstaclePlatform3"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ObstaclePlatform3" unique_id=570161389]
 shape = SubResource("obstacle_shape")
 
-[node name="ObstaclePlatform4" type="StaticBody3D" parent="."]
+[node name="ObstaclePlatform4" type="StaticBody3D" parent="." unique_id=582566411]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 56, 9, 1)
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="ObstaclePlatform4"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="ObstaclePlatform4" unique_id=1204859563]
 mesh = SubResource("obstacle_mesh")
 surface_material_override/0 = SubResource("obstacle_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="ObstaclePlatform4"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ObstaclePlatform4" unique_id=289870225]
 shape = SubResource("obstacle_shape")
 
-[node name="ObstaclePlatform5" type="StaticBody3D" parent="."]
+[node name="ObstaclePlatform5" type="StaticBody3D" parent="." unique_id=252442881]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 66, 10, 0)
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="ObstaclePlatform5"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="ObstaclePlatform5" unique_id=268438215]
 mesh = SubResource("obstacle_mesh")
 surface_material_override/0 = SubResource("obstacle_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="ObstaclePlatform5"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ObstaclePlatform5" unique_id=1470468061]
 shape = SubResource("obstacle_shape")
 
-[node name="ObstacleVine1" parent="." instance=ExtResource("vine")]
+[node name="ObstacleVine1" parent="." unique_id=1003244742 instance=ExtResource("vine")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 14, 0)
 
-[node name="ObstacleVine2" parent="." instance=ExtResource("vine")]
+[node name="ObstacleVine2" parent="." unique_id=679129412 instance=ExtResource("vine")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31, 15, 1)
 
-[node name="ObstacleVine3" parent="." instance=ExtResource("vine")]
+[node name="ObstacleVine3" parent="." unique_id=770513435 instance=ExtResource("vine")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 41, 16, 0)
 
-[node name="ObstacleVine4" parent="." instance=ExtResource("vine")]
+[node name="ObstacleVine4" parent="." unique_id=74345926 instance=ExtResource("vine")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 51, 17, 0)
 
-[node name="ObstacleVine5" parent="." instance=ExtResource("vine")]
+[node name="ObstacleVine5" parent="." unique_id=334208874 instance=ExtResource("vine")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 61, 18, 0)
 
-[node name="FinishPlatform" type="StaticBody3D" parent="."]
+[node name="FinishPlatform" type="StaticBody3D" parent="." unique_id=1788064824]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 76, 10, 0)
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="FinishPlatform"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="FinishPlatform" unique_id=847274527]
 mesh = SubResource("plat5_mesh")
 surface_material_override/0 = SubResource("finish_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="FinishPlatform"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="FinishPlatform" unique_id=981812454]
 shape = SubResource("plat5_shape")

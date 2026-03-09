@@ -16,6 +16,14 @@ height = 0.12
 [sub_resource type="StandardMaterial3D" id="mat_plat"]
 albedo_color = Color(0.08, 0.18, 0.06, 1)
 
+[sub_resource type="QuadMesh" id="quad_main"]
+size = Vector2(3.2, 4.2)
+flip_faces = true
+
+[sub_resource type="QuadMesh" id="quad_settings"]
+size = Vector2(3.4, 4.6)
+flip_faces = true
+
 [node name="MainMenu" type="Node3D"]
 script = ExtResource("1")
 
@@ -45,3 +53,39 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, -5)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, 0)
 mesh = SubResource("CylinderMesh_plat")
 surface_material_override/0 = SubResource("mat_plat")
+
+[node name="MainCard" type="Node3D" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.5, 0, -5)
+
+[node name="VP" type="SubViewport" parent="MainCard"]
+size = Vector2i(420, 560)
+transparent_bg = false
+render_target_update_mode = 3
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="MainCard"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
+mesh = SubResource("quad_main")
+
+[node name="SettingsCard" type="Node3D" parent="."]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -5, 0, 0)
+
+[node name="VP" type="SubViewport" parent="SettingsCard"]
+size = Vector2i(440, 600)
+transparent_bg = false
+render_target_update_mode = 3
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="SettingsCard"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.3, 0)
+mesh = SubResource("quad_settings")
+
+[node name="CustomizeCard" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 5)
+
+[node name="VP" type="SubViewport" parent="CustomizeCard"]
+size = Vector2i(420, 560)
+transparent_bg = false
+render_target_update_mode = 3
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CustomizeCard"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
+mesh = SubResource("quad_main")

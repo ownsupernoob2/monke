@@ -40,8 +40,11 @@ var _transitioning   := false
 var _cards : Array[Dictionary] = []
 
 # ── .tscn references ─────────────────────────────────────────────────────────
-@onready var camera_pivot := $CameraPivot
-@onready var monkey_pivot := $MonkeyPivot
+@onready var camera_pivot         := $CameraPivot
+@onready var monkey_pivot         := $MonkeyPivot
+@onready var _main_card_node      : Node3D = $MainCard
+@onready var _settings_card_node  : Node3D = $SettingsCard
+@onready var _customize_card_node : Node3D = $CustomizeCard
 
 # ── Settings widgets (populated during build) ────────────────────────────────
 var _master_slider     : HSlider  = null
@@ -96,6 +99,21 @@ func _setup_monkey() -> void:
 # ══════════════════════════════════════════════════════════════════════════════
 #  CARD HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
+
+func _use_card(section: Section, card: Node3D) -> Dictionary:
+	var vp        : SubViewport    = card.get_node("VP")
+	var mesh_inst : MeshInstance3D = card.get_node("MeshInstance3D")
+	call_deferred("_apply_vp_material", mesh_inst, vp)
+	var info := {
+		"section":   section,
+		"node":      card,
+		"viewport":  vp,
+		"mesh":      mesh_inst,
+		"quad_size": (mesh_inst.mesh as QuadMesh).size,
+	}
+	_cards.append(info)
+	return info
+
 
 func _create_card(section: Section,
 		vp_size: Vector2i = CARD_VP_SIZE,
@@ -184,7 +202,7 @@ func _spacer(parent: Control, height: float) -> void:
 # ══════════════════════════════════════════════════════════════════════════════
 
 func _build_main_card() -> void:
-	var info := _create_card(Section.MAIN)
+	var info := _use_card(Section.MAIN, _main_card_node)
 	var vp : SubViewport = info.viewport
 
 	var bg := ColorRect.new()
@@ -232,7 +250,7 @@ func _build_main_card() -> void:
 # ══════════════════════════════════════════════════════════════════════════════
 
 func _build_settings_card() -> void:
-	var info := _create_card(Section.SETTINGS, Vector2i(440, 600), Vector2(3.4, 4.6))
+	var info := _use_card(Section.SETTINGS, _settings_card_node)
 	var vp : SubViewport = info.viewport
 
 	var bg := ColorRect.new()
@@ -354,7 +372,7 @@ func _apply_settings() -> void:
 # ══════════════════════════════════════════════════════════════════════════════
 
 func _build_customize_card() -> void:
-	var info := _create_card(Section.CUSTOMIZE)
+	var info := _use_card(Section.CUSTOMIZE, _customize_card_node)
 	var vp : SubViewport = info.viewport
 
 	var bg := ColorRect.new()
@@ -457,7 +475,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if card_info.section != _current_section:
 			continue
 		if _forward_to_card(event, card_info):
-			get_viewport().set_input_as_handled()
+			var vp := get_viewport()
+			if vp:
+				vp.set_input_as_handled()
 		return
 
 
@@ -512,6 +532,8 @@ func _forward_to_card(event: InputEvent, card_info: Dictionary) -> bool:
 		fwd.position = vp_pos
 		fwd.global_position = vp_pos
 
+	if not vp.is_inside_tree():
+		return false
 	vp.push_input(fwd)
 	return true
 
