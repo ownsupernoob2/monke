@@ -29,6 +29,13 @@ var _display_vel    : float   = 0.0
 ## Active damping coefficient (set per grab, one-hand vs two-hand).
 var _active_damp    : float   = 6.0
 
+## When non-zero, the hand's global position is forced to this point every
+## physics frame — implements the "shoulder anchor" ball-and-socket effect.
+var pin_world : Vector3 = Vector3.ZERO
+## Tracks whether pin_world has been applied at least once, so _tip_world
+## can be seeded from the real shoulder position on the first pinned frame.
+var _pin_applied : bool = false
+
 # ── Node refs ─────────────────────────────────────────────────────────────────
 @onready var pivot    : Node3D         = $Pivot
 @onready var arm_mesh : MeshInstance3D = $Pivot/ArmMesh
@@ -86,6 +93,17 @@ func guide_to(world_pos: Vector3) -> void:
 # ── Physics ───────────────────────────────────────────────────────────────────
 
 func _physics_process(delta: float) -> void:
+	# Anchor shoulder to body side when ball-and-socket mode is active.
+	if pin_world != Vector3.ZERO:
+		global_position = pin_world
+		# On the very first pinned frame, seed _tip_world from the socket
+		# position so the arm hangs naturally from the torso immediately
+		# instead of stuttering from the old scene-tree offset position.
+		if not _pin_applied:
+			_tip_world  = global_position + Vector3(0.0, -rest_length, 0.0)
+			_tip_vel    = Vector3.ZERO
+			_pin_applied = true
+
 	# Defer initialisation to the first physics frame so global_position is valid.
 	if not _initialized:
 		_reset_tip()

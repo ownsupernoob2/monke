@@ -1,32 +1,53 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene format=4 uid="uid://bfigq75ckndy2"]
 
-[ext_resource type="Script" path="res://components/hand.gd" id="1"]
+[ext_resource type="Script" uid="uid://c1jvlatoqq8oq" path="res://components/hand.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://ciofo57crangw" path="res://models/monke_Arms.png" id="2_asjjv"]
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_1"]
-top_radius = 0.035
-bottom_radius = 0.055
-height = 1.0
-radial_segments = 5
-rings = 1
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eqnjs"]
+resource_name = "Arms"
+cull_mode = 2
+albedo_texture = ExtResource("2_asjjv")
+roughness = 0.5
 
-; Warm brown – low-poly monkey arm colour.
-[sub_resource type="StandardMaterial3D" id="Material_Hand"]
-albedo_color = Color(0.52, 0.30, 0.12, 1)
-roughness = 0.9
+[sub_resource type="ArrayMesh" id="ArrayMesh_ot3ff"]
+_surfaces = [{
+"aabb": AABB(-0.20859408, -0.5066863, -0.2, 0.39999992, 1.4, 0.39999998),
+"format": 34896613377,
+"index_count": 144,
+"index_data": PackedByteArray("AAABAAIAAAADAAEAEgACAAEAAwASAAEABAADAAAAAwAEABIABAAAAAUABQAAAAIAEwASAAQAEgAUAAIABQACABQAEgATAA8AEgAPABAAEAAUABIAEAAPAAgAEwAIAA8AEAARABQAEAAIABEACAAUABEACAAFABQAEwAVAAgABQAIABUABwATAAQABQAHAAQAFgAVABMABwAWABMAFwAFABUAFgAXABUAFwAJAAUABQAJAAcABgAXABYACgAJABcABgAKABcAGAAGABYAGAAKAAYAGAAWAAcACgAZAAkAGAAZAAoAGQALAAkABwAJAAsADgAZABgADgAYAAcADgANABkAGQANAAsADgAHAAwADQAOAAwABwALAAwADQAMAAsA"),
+"lods": [0.00028155075, PackedByteArray("AAABAAIAAAADAAEABAADAAAAAwAEAAEABAAAAAUABQAAAAIABgABAAQABQAHAAQABwAGAAQACAAFAAIABQAJAAcACgAJAAUABQAIAAoABwAJAAsACgALAAkABwALAAwACgANAAsADQAMAAsADgAHAAwADQAOAAwADgANAAoADgAGAAcADgAKAAYABgAKAAgABgAIAA8AAQAGAA8AAQAPABAAEAAPAAgAEAACAAEACAACABEAEAARAAIAEAAIABEA")],
+"name": "Arms",
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 26,
+"vertex_data": PackedByteArray("AAAyM///AAAAAP//AAAAAAAA/////wAAAAAyMwAAAAD/fzIzAAAAAP9/MjP//wAA//8AAAAAAAD/f1UOAAAAAP//2u///wAA/39VDv//AAD//wAA//8AAAAAVQ7//wAAAABVDgAAAAAAAAAA//8AAAAAAAAAAAAA///a7wAAAAB/x///AAAAAH/H/////wAA/3///wAAAAD//zIzAAAAAP9//////wAA//8yM///AAD//1UOAAAAAP//VQ7//wAA/38AAAAAAAD/fwAA//8AAA==")
+}]
+blend_shape_mode = 0
 
-; ─────────────────────────────────────────────────────────────────────────────
-; ROOT  –  Node3D
-;   Positioned at the hand origin (shoulder) relative to Head.
-;   hand.gd controls all rotation and scaling at runtime.
-; ─────────────────────────────────────────────────────────────────────────────
-[node name="Hand" type="Node3D"]
+[sub_resource type="ArrayMesh" id="ArrayMesh_yun3y"]
+resource_name = "monke_Cube_002"
+_surfaces = [{
+"aabb": AABB(-0.20859408, -0.5066863, -0.2, 0.39999992, 1.4, 0.39999998),
+"attribute_data": PackedByteArray("zGz///+f/7//n///zGz/v8xs/x/MbAAA/58AAPab/z9pqUo7/1//P5Vj/x+VYwAA/18AAJVj/5//X/9/zGz/n/9f/7+VY/+//5//v8xs/7/2m/9/aam0hMxs/x+VY/+fzGz/n5Vj/x+VY/+flWP//5Vj/7+VY/8f/x//f/9f/z//X/9//x//P/9f//+VY/+/lWP///9f/7/MbP+fzGz//8xs/x/MbP+/aam0hPab/z9pqUo79pv/f2mptIT/3/8//9//f2mpSjv/X/9/9pv/P/ab/3//X/8//5//H8xs/z+VY/8//1//H/8//3//P/8//7//f/+//z+VY/9/zGz/P8xs/3+VY/8/zGz/f/9f/5+VY/9//5//nw=="),
+"format": 34896613399,
+"index_count": 144,
+"index_data": PackedByteArray("AAABAAIAAAADAAEABAAGADYABAAFAAYABwAEADYABwA2AAgABAAHADcAOAAEADcAOAAKAAQACQAKADgACQA5AAoAOQALAAoAOQAMAAsAOgAfACAAOgA7AB8AHgA7ADoAHgAhADsAPAAvADAAPAA9AC8ALgA9ADwALgAxAD0APgA/AEAAQAA/ADMAQAAzADQAPgBBAD8AMgBBAD4AMgA1AEEADQBCAA8AEAANABEAEABDAA0AQwBEAA0ADQBEAEIAQwAOAEQAQgBFAA8AEwAPAEUAEwBFABIARQBCABQARQAUABUAFgAXABgAFgAZABcAGgAbABwAGgAdABsAIgAjACQAIgAlACMAJgAnACgAJgApACcAKgArACwAKgAtACsA"),
+"lods": [0.00028155075, PackedByteArray("AAABAAIAAAADAAEABAAFAAYABwAEAAYABwAGAAgABAAHAAkACQAKAAQACQALAAoACQAMAAsADQAOAA8AEAAOAA0AEAANABEADgASAA8AEwAPABIAEgAOABQAEgAUABUAFgAXABgAFgAZABcAGgAbABwAGgAdABsAHgAfACAAHgAhAB8AIgAjACQAIgAlACMAJgAnACgAJgApACcAKgArACwAKgAtACsALgAvADAALgAxAC8AMgAzADQAMgA1ADMA")],
+"material": SubResource("StandardMaterial3D_eqnjs"),
+"name": "Arms",
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 70,
+"vertex_data": PackedByteArray("AAAyM///VNUAAP//AABU1QAA/////1TVAAAyMwAAVNX/fzIz////vwAAMjP///+/AAD//////7///9rv//8OxH/H/////wfb//8AAP///7//f1UO////vwAAVQ7///+/AAAAAP///7//f1UOAAD/////AAAAAP///38yMwAA//8AAAAAAAD//wAAVQ4AAP//AAD//wAA//8AADIzAAD/////2u8AAP//f8f//wAA////fzIz//+qKv9/VQ4AAKoq/38yMwAAqir/f1UO//+qKv9/VQ4AAP+/AABVDv///78AAFUOAAD/v/9/VQ7///+/AAAAAAAA/7///wAA////v///AAAAAP+/AAAAAP///78AAAAA//9U1QAAVQ4AAFTVAABVDv//VNUAAAAAAABU1f9/MjMAAKjhAAAyM///u9X/fzIz//8dzwAAMjMAAKrpf8f//wAA0u3//9rv//9d5n/H/////yLk///a7wAAJPB/x///AADx+gAA////////AAD//wAA//9/x/////+A+f//AAAAAFTV///a7///VNX//9rvAABU1f//AAD//1TV/3//////Z8P//zIz////v///VQ7///+//38AAP///7//fwAAAAD/v/9/AAD///+//3///wAASfz/f//////x/f//VQ4AAFTV//8yM///VNX//zIzAABU1f//VQ7//1TV//8yMwAA////fwAAAAD/////VQ4AAP///3///wAA//9U1VTVVNVU1VTVVNVU1VTV/////////////////////////////////////////////////7//v/+//7//v/+//7//v/+//7//v/+//7//v868MMPzqQrWVNVU1VTVVNVU1VTVVNVU1f///3////9/////f////38AAP9/AAD/fwAA/38AAP9/VNVU1VTVVNVU1VTVVNVU1XZixE7QVRdV+UyCWQlq+krVMSUZuzc/E645TBElMNUascJkBf9//7//f/+/3IaQvKoqqiqqKqoqqiqqKqoqqir/////////////////////AAD/fwAA/3/+wf8DPYLgvqoqqiqqKqoqqiqqKqoqqir/v/+//7//v/+//79RvazC")
+}]
+blend_shape_mode = 0
+shadow_mesh = SubResource("ArrayMesh_ot3ff")
+
+[node name="Hand" type="Node3D" unique_id=61592430]
 script = ExtResource("1")
 
-; Pivot is rotated by hand.gd to aim at the vine / tip position.
-[node name="Pivot" type="Node3D" parent="."]
+[node name="Pivot" type="Node3D" parent="." unique_id=1485953289]
 
-; ArmMesh – hand.gd sets rotation_degrees.x = -90 in _ready() so
-; the cylinder's height axis aligns with Pivot's -Z (forward reach).
-[node name="ArmMesh" type="MeshInstance3D" parent="Pivot"]
-mesh = SubResource("CylinderMesh_1")
-surface_material_override/0 = SubResource("Material_Hand")
+[node name="ArmMesh" type="MeshInstance3D" parent="Pivot" unique_id=1502648814]
+mesh = SubResource("ArrayMesh_yun3y")
+skeleton = NodePath("")

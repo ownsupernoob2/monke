@@ -23,6 +23,64 @@ extends Control
 
 @onready var lobby : Node = get_node("/root/GameLobby")
 
+# ─ Loading overlay (built at runtime) ─
+var _loading_overlay  : CanvasLayer = null
+var _loading_label    : Label   = null
+var _loading_msg_base : String  = ""
+var _dot_timer        : float   = 0.0
+var _dot_count        : int     = 0
+var _loading_active   : bool    = false
+
+
+func _process(delta: float) -> void:
+	if not _loading_active:
+		return
+	_dot_timer += delta
+	if _dot_timer >= 0.45:
+		_dot_timer = 0.0
+		_dot_count = (_dot_count + 1) % 4
+		_loading_label.text = _loading_msg_base + ".".repeat(_dot_count)
+
+
+func _show_loading(msg: String) -> void:
+	if _loading_overlay == null:
+		_build_loading_overlay()
+	_loading_msg_base = msg
+	_loading_label.text = msg
+	_loading_overlay.visible = true
+	_loading_active = true
+	_dot_timer = 0.0
+	_dot_count = 0
+
+
+func _hide_loading() -> void:
+	_loading_active = false
+	if _loading_overlay:
+		_loading_overlay.visible = false
+
+
+func _build_loading_overlay() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "LoadingLayer"
+	layer.layer = 100
+	add_child(layer)
+
+	var bg := ColorRect.new()
+	bg.color = Color(0.0, 0.0, 0.0, 0.72)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(bg)
+
+	_loading_label = Label.new()
+	_loading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_loading_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_loading_label.add_theme_font_size_override("font_size", 28)
+	_loading_label.add_theme_color_override("font_color", Color.WHITE)
+	_loading_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(_loading_label)
+
+	_loading_overlay = layer
+
+
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -34,10 +92,12 @@ func _ready() -> void:
 	# Host navigates manually after await completes.
 	lobby.connection_failed.connect(_on_connection_failed)
 
-	# Pre-fill name from settings.
+	# Pre-fill name only if a real name was previously saved.
 	if has_node("/root/GameSettings"):
 		var gs : Node = get_node("/root/GameSettings")
-		name_edit.text = gs.player_name
+		if gs.player_name != "":
+			name_edit.text = gs.player_name
+	name_edit.placeholder_text = "Enter your name…"
 
 	_update_ui_for_mode()
 
@@ -61,24 +121,30 @@ func _eos_available() -> bool:
 	return get_node("/root/EOSBootstrap").is_ready
 
 
-func _save_name() -> void:
+## Returns false and shows an error if the name is empty.
+func _save_name() -> bool:
 	var n := name_edit.text.strip_edges()
 	if n == "":
-		n = "Player"
+		status_label.text = "Please enter a name before continuing."
+		name_edit.grab_focus()
+		return false
 	if has_node("/root/GameSettings"):
 		var gs : Node = get_node("/root/GameSettings")
 		gs.player_name = n
 	# Refresh the EOS display name to match.
 	if has_node("/root/EOSBootstrap"):
 		get_node("/root/EOSBootstrap").refresh_display_name()
+	return true
 
 
 func _on_host() -> void:
-	_save_name()
-	status_label.text = "Creating lobby…"
+	if not _save_name():
+		return
+	_show_loading("Creating lobby")
 	host_btn.disabled = true
 	join_btn.disabled = true
 	var err : int = await lobby.host_lobby()
+	_hide_loading()
 	if err != OK:
 		status_label.text = "Failed to create lobby."
 		host_btn.disabled = false
@@ -89,19 +155,20 @@ func _on_host() -> void:
 
 
 func _on_join() -> void:
-	_save_name()
+	if not _save_name():
+		return
 	var target : String
 	if _eos_available():
 		target = code_edit.text.strip_edges()
 		if target == "":
 			status_label.text = "Please enter a room code."
 			return
-		status_label.text = "Joining room %s…" % target
+		_show_loading("Joining room %s" % target)
 	else:
 		target = address_edit.text.strip_edges()
 		if target == "":
 			target = "127.0.0.1"
-		status_label.text = "Connecting to %s…" % target
+		_show_loading("Connecting to %s" % target)
 
 	host_btn.disabled = true
 	join_btn.disabled = true
@@ -111,6 +178,7 @@ func _on_join() -> void:
 	# Wire connected signal one-shot — fires asynchronously when peer connects.
 	lobby.connected.connect(_on_connected, CONNECT_ONE_SHOT)
 	var err : int = await lobby.join_lobby(target)
+	_hide_loading()
 	if err != OK:
 		if lobby.connected.is_connected(_on_connected):
 			lobby.connected.disconnect(_on_connected)
@@ -126,6 +194,7 @@ func _on_connected() -> void:
 
 
 func _on_connection_failed() -> void:
+	_hide_loading()
 	status_label.text = "Connection failed. Try again."
 	host_btn.disabled = false
 	join_btn.disabled = false

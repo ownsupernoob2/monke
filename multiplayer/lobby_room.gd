@@ -1,7 +1,6 @@
 extends Node3D
 
-## 3D lobby room – players appear as capsules standing side by side.
-## Hover over a capsule to see their name.  Host can click "Start Game".
+## 3D lobby room – players appear as their in-game model standing side by side.
 
 @onready var player_container : Node3D  = $PlayerContainer
 @onready var start_btn        : Button  = $UILayer/BottomBar/StartBtn
@@ -19,17 +18,7 @@ var _public_ip  : String = ""
 var _lan_ip     : String = ""
 var _ip_visible : bool   = false
 
-## Fixed palette so every peer gets a consistent colour.
-const COLORS : Array[Color] = [
-	Color(0.9, 0.3, 0.2),
-	Color(0.2, 0.6, 0.9),
-	Color(0.3, 0.85, 0.3),
-	Color(0.95, 0.8, 0.2),
-	Color(0.7, 0.3, 0.9),
-	Color(0.95, 0.5, 0.2),
-	Color(0.3, 0.9, 0.8),
-	Color(0.9, 0.4, 0.7),
-]
+const PLAYER_SCENE : String = "res://components/Player.tscn"
 
 
 func _ready() -> void:
@@ -61,6 +50,7 @@ func _ready() -> void:
 
 	lobby.player_joined.connect(_on_player_joined)
 	lobby.player_left.connect(_on_player_left)
+	lobby.player_renamed.connect(_on_player_renamed)
 	lobby.game_starting.connect(_on_game_starting)
 	lobby.server_closed.connect(_on_server_closed)
 
@@ -69,69 +59,50 @@ func _ready() -> void:
 	if chat_scene:
 		add_child(chat_scene.instantiate())
 
-	# Create capsules for every player already in the lobby.
+	# Create display models for every player already in the lobby.
 	for id : int in lobby.players.keys():
 		var p_name : String = lobby.players[id]["name"]
-		_spawn_capsule(id, p_name)
+		_spawn_player_model(id, p_name)
 	_update_count()
 
 
-# ── Capsule management ────────────────────────────────────────────────────────
+# ── Player model display ──────────────────────────────────────────────────────
 
-func _spawn_capsule(id: int, p_name: String) -> void:
-	var root := Node3D.new()
-	root.name = "P_%d" % id
+func _spawn_player_model(id: int, _p_name: String) -> void:
+	var scene : PackedScene = load(PLAYER_SCENE)
+	if scene == null:
+		push_error("LobbyRoom: could not load Player.tscn")
+		return
 
-	# ── Mesh ──
-	var mesh_inst := MeshInstance3D.new()
-	var cap_mesh := CapsuleMesh.new()
-	cap_mesh.radius = 0.3
-	cap_mesh.height = 1.2
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = COLORS[abs(id) % COLORS.size()]
-	mesh_inst.mesh = cap_mesh
-	mesh_inst.material_override = mat
-	root.add_child(mesh_inst)
+	var player_node : Node = scene.instantiate()
+	player_node.name = "P_%d" % id
 
-	# ── Area3D for hover ──
-	var area := Area3D.new()
-	area.input_ray_pickable = true
-	var shape := CollisionShape3D.new()
-	var cap_shape := CapsuleShape3D.new()
-	cap_shape.radius = 0.35
-	cap_shape.height = 1.3
-	shape.shape = cap_shape
-	area.add_child(shape)
-	root.add_child(area)
+	# Mark as a display puppet: no camera, no input, no HUD, torso visible.
+	player_node.set_multiplayer_authority(id)
+	player_node.setup_network(false)
 
-	# ── Name label (always visible) ──
-	var label := Label3D.new()
-	label.name = "NameLabel"
-	label.text = p_name
-	label.position = Vector3(0, 1.0, 0)
-	label.font_size = 36
-	label.outline_size = 6
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.visible = true
-	root.add_child(label)
+	# Face toward the lobby camera (rotate 180° around Y).
+	player_node.rotation.y = PI
 
-	# ── Position: space players along X ──
+	# Space models evenly along X. Player origin is at feet → y = 0.
 	var slot : int = player_container.get_child_count()
-	root.position = Vector3(slot * 1.6 - 3.2, 0.6, 0)
+	player_node.position = Vector3(slot * 1.6 - 3.2, 0.0, 0.0)
 
-	player_container.add_child(root)
+	player_container.add_child(player_node)  # triggers _ready() → strips camera/HUD
+
+	# Freeze all processing so puppet physics don't run in the lobby.
+	player_node.set_process_mode(Node.PROCESS_MODE_DISABLED)
 
 
-func _remove_capsule(id: int) -> void:
+func _remove_player_model(id: int) -> void:
 	var node : Node = player_container.get_node_or_null("P_%d" % id)
 	if node:
 		node.queue_free()
-	# Reposition remaining capsules after a short delay so the freed node is gone.
 	await get_tree().create_timer(0.1).timeout
-	_reposition_capsules()
+	_reposition_models()
 
 
-func _reposition_capsules() -> void:
+func _reposition_models() -> void:
 	var i : int = 0
 	for child : Node in player_container.get_children():
 		child.position.x = i * 1.6 - 3.2
@@ -145,15 +116,24 @@ func _update_count() -> void:
 # ── Signals ───────────────────────────────────────────────────────────────────
 
 func _on_player_joined(id: int, p_name: String) -> void:
-	# Guard against duplicates (our own capsule was created in _ready).
 	if player_container.has_node("P_%d" % id):
 		return
-	_spawn_capsule(id, p_name)
+	_spawn_player_model(id, p_name)
 	_update_count()
 
 
+## Update the floating name label on a model whose name was deduplicated.
+func _on_player_renamed(id: int, new_name: String) -> void:
+	var node := player_container.get_node_or_null("P_%d" % id)
+	if node == null:
+		return
+	var lbl := node.get_node_or_null("NameLabel3D")
+	if lbl:
+		lbl.text = new_name
+
+
 func _on_player_left(id: int) -> void:
-	_remove_capsule(id)
+	_remove_player_model(id)
 	_update_count()
 
 
@@ -175,6 +155,8 @@ func _on_start() -> void:
 
 func _on_back() -> void:
 	lobby.disconnect_lobby()
+	if has_node("/root/GameSettings"):
+		get_node("/root/GameSettings").clear_chat_history()
 	get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
 
 

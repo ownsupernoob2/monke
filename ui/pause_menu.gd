@@ -11,6 +11,7 @@ signal back_to_menu     ## Emitted when "Back to Menu" is pressed.
 @onready var fov_label   : Label          = $Panel/VBox/FOVRow/FOVValue
 @onready var sens_slider : HSlider        = $Panel/VBox/SensRow/SensSlider
 @onready var sens_label  : Label          = $Panel/VBox/SensRow/SensValue
+@onready var fullscreen_btn : CheckButton = $Panel/VBox/FullscreenRow/FullscreenBtn
 
 var _is_open : bool = false
 
@@ -26,9 +27,11 @@ func _ready() -> void:
 		fov_label.text    = "%d" % int(gs.fov)
 		sens_slider.value = gs.mouse_sensitivity
 		sens_label.text   = "%.2f" % gs.mouse_sensitivity
+		fullscreen_btn.button_pressed = gs.fullscreen
 
 	fov_slider.value_changed.connect(_on_fov_changed)
 	sens_slider.value_changed.connect(_on_sens_changed)
+	fullscreen_btn.toggled.connect(_on_fullscreen_toggled)
 
 
 func _input(event: InputEvent) -> void:
@@ -79,6 +82,13 @@ func _on_fov_changed(value: float) -> void:
 	var gs : Node = _gs()
 	if gs:
 		gs.fov = value
+
+
+func _on_fullscreen_toggled(enabled: bool) -> void:
+	var gs : Node = _gs()
+	if gs:
+		gs.fullscreen = enabled
+		gs._apply_display()
 
 
 func _on_sens_changed(value: float) -> void:

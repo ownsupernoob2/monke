@@ -2,6 +2,7 @@ extends CanvasLayer
 
 ## In-game chat overlay.  Press T to open, Enter to send, Escape to cancel.
 ## Listens to GameLobby.chat_received for incoming messages.
+## Messages are persisted in GameSettings.chat_history across scene changes.
 
 const MAX_MESSAGES     : int   = 50
 const INACTIVITY_FADE  : float = 10.0  ## seconds of inactivity before chat fades out
@@ -31,6 +32,15 @@ func _ready() -> void:
 
 	input_field.text_submitted.connect(_on_text_submitted)
 
+	# Restore messages from the previous scene (chat persistence).
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		for entry : Dictionary in gs.chat_history:
+			if entry.get("type", "msg") == "alert":
+				_add_alert_no_save(entry.get("text", ""))
+			else:
+				_add_message_no_save(entry.get("sender", ""), entry.get("text", ""))
+
 
 func _process(delta: float) -> void:
 	if _is_open:
@@ -41,8 +51,8 @@ func _process(delta: float) -> void:
 		return
 	_inactive_timer += delta
 	if _inactive_timer >= INACTIVITY_FADE:
-		# Smoothly fade out the panel.
-		panel.modulate.a = lerpf(panel.modulate.a, 0.0, delta * 1.5)
+		# Smoothly fade toward translucent (keep history readable).
+		panel.modulate.a = lerpf(panel.modulate.a, 0.15, delta * 1.5)
 	else:
 		# Keep visible while recently active.
 		panel.modulate.a = 0.4
@@ -101,14 +111,27 @@ func _on_text_submitted(text: String) -> void:
 	_close_chat()
 
 
+## Broadcast a system message (yellow italic) to all players via alert channel.
+## Any script can call this on the local Chat node to post a game event.
+func system_message(text: String) -> void:
+	if has_node("/root/GameLobby") and GameLobby.is_host():
+		GameLobby.send_alert(text)
+	else:
+		_add_alert(text)
+
+
 func _handle_command(cmd: String) -> void:
 	var parts := cmd.split(" ", false, 1)
 	if parts.size() < 2:
-		_add_alert("Usage: /kick <name>  or  /ban <name>")
+		_add_alert("Usage: /kick <name>  |  /ban <name>  |  /system <message>")
 		return
 	var command := parts[0].to_lower()
 	var target_name := parts[1].strip_edges()
 	match command:
+		"/system":
+			# Broadcast a host system message to all players.
+			GameLobby.send_alert("[System] " + target_name)
+			return
 		"/kick", "/ban":
 			var pid := _find_peer_by_name(target_name)
 			if pid <= 0:
@@ -155,6 +178,16 @@ func _on_alert_received(text: String) -> void:
 
 
 func _add_message(sender: String, text: String) -> void:
+	# Save to persistent history.
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		gs.chat_history.append({"type": "msg", "sender": sender, "text": text})
+		if gs.chat_history.size() > MAX_MESSAGES:
+			gs.chat_history.pop_front()
+	_add_message_no_save(sender, text)
+
+
+func _add_message_no_save(sender: String, text: String) -> void:
 	# Reset inactivity so the panel is visible for the new message.
 	_inactive_timer = 0.0
 	if not _is_open:
@@ -175,6 +208,16 @@ func _add_message(sender: String, text: String) -> void:
 
 
 func _add_alert(text: String) -> void:
+	# Save to persistent history.
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		gs.chat_history.append({"type": "alert", "text": text})
+		if gs.chat_history.size() > MAX_MESSAGES:
+			gs.chat_history.pop_front()
+	_add_alert_no_save(text)
+
+
+func _add_alert_no_save(text: String) -> void:
 	_inactive_timer = 0.0
 	if not _is_open:
 		panel.modulate.a = 0.4
@@ -215,6 +258,8 @@ func _on_server_closed() -> void:
 		var gs : Node = get_node("/root/GameSettings")
 		if gs.disconnect_message.is_empty():
 			gs.disconnect_message = "Host left the server."
+		# Clear chat history on disconnect so a fresh session starts clean.
+		gs.clear_chat_history()
 	# Return to menu after a short delay.
 	await get_tree().create_timer(2.0).timeout
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

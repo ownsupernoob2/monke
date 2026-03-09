@@ -7,7 +7,7 @@ extends Node
 ## Bananas spawn at 40 % of the normal rate.
 ## Round ends after 2 minutes; highest survival score wins.
 
-const TAG_RANGE      : float = 1.6   ## metres — proximity needed to tag
+const TAG_RANGE      : float = 3.0   ## metres — proximity needed to tag
 const ROUND_DURATION : float = 120.0
 const TAG_COOLDOWN   : float = 2.0   ## seconds before new IT can transfer again
 

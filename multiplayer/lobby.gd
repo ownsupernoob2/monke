@@ -21,6 +21,7 @@ signal game_starting
 signal server_closed                       ## host left / connection lost
 signal chat_received(sender: String, text: String)  ## new chat message
 signal alert_received(text: String)                  ## red kick/ban notices
+signal player_renamed(id: int, new_name: String)     ## name deduplicated after collision
 
 const DEFAULT_PORT : int = 7777
 const MAX_PLAYERS  : int = 8
@@ -121,6 +122,9 @@ func _disconnect_multiplayer_signals() -> void:
 # ── EOS implementation ────────────────────────────────────────────────────────
 
 func _host_lobby_eos() -> Error:
+	# Ensure any previous lobby / peer is fully torn down before re-hosting.
+	disconnect_lobby()
+
 	await get_node("/root/EOSBootstrap").wait_until_ready()
 
 	var hlobbies : Node = _get_hlobbies()
@@ -160,6 +164,9 @@ func _host_lobby_eos() -> Error:
 
 
 func _join_lobby_eos(lobby_id: String) -> Error:
+	# Ensure any previous lobby / peer is fully torn down before joining.
+	disconnect_lobby()
+
 	await get_node("/root/EOSBootstrap").wait_until_ready()
 
 	var hlobbies : Node = _get_hlobbies()
@@ -453,9 +460,15 @@ func _rpc_register_player(id: int, p_name: String) -> void:
 	players[id] = { "name": unique_name }
 	if is_new:
 		player_joined.emit(id, unique_name)
-	# If the host had to rename this player, tell them their actual name.
+	# If the host had to rename this player due to a duplicate, broadcast the
+	# final name to the renamed player AND to all other connected clients so
+	# every lobby view stays in sync.
 	if is_host() and unique_name != p_name:
 		rpc_id(id, "_rpc_set_your_name", unique_name)
+		for other_id : int in players.keys():
+			if other_id != id and other_id != multiplayer.get_unique_id():
+				rpc_id(other_id, "_rpc_notify_rename", id, unique_name)
+		player_renamed.emit(id, unique_name)
 
 
 ## Called on the client when the host assigned them a different name due to a duplicate.
@@ -464,3 +477,12 @@ func _rpc_set_your_name(assigned_name: String) -> void:
 	var my_id : int = multiplayer.get_unique_id()
 	if players.has(my_id):
 		players[my_id]["name"] = assigned_name
+	player_renamed.emit(my_id, assigned_name)
+
+
+## Sent by the host to all OTHER clients when a player's name was deduplicated.
+@rpc("authority", "reliable")
+func _rpc_notify_rename(id: int, new_name: String) -> void:
+	if players.has(id):
+		players[id]["name"] = new_name
+	player_renamed.emit(id, new_name)

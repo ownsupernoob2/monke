@@ -26,8 +26,10 @@ const GRAVITY           := 9.8
 
 # ── Release feel (tweak in the Inspector) ──────────────────────────────────────
 ## Speed multiplier applied on release in the full 3-D look direction.
-## 1.0 = pure physics, no free bonus. Combo adds on top.
-@export var release_boost_mult : float = 1.0
+## >1.0 gives a base launch even without combos.
+@export var release_boost_mult : float = 1.35
+## Hard speed cap (m/s) on release without any combo.  Combos exceed this.
+@export var base_release_cap : float = 12.0
 ## Camera FOV at rest.
 @export var fov_base       : float = 70.0
 ## Camera FOV at full swing speed (fov_speed_full m/s).
@@ -67,6 +69,8 @@ const GRAVITY           := 9.8
 # ── Multiplayer state ─────────────────────────────────────────────────────────
 ## True = this is the local player (gets camera/input). False = network puppet.
 var is_local    : bool  = true
+## Set by setup_network() to prevent _ready() from overriding is_local.
+var _network_configured : bool = false
 var _net_pos    : Vector3 = Vector3.ZERO  # target pos from authority
 var _net_rot_y  : float   = 0.0          # target Y rotation
 var _net_head_x : float   = 0.0          # target head pitch
@@ -105,6 +109,11 @@ var _right_vine : Vine = null
 
 ## Extra FOV degrees injected on a timed release; decays to 0 each frame.
 var _fov_pulse : float = 0.0
+
+# ── Shift-lock (third-person) ─────────────────────────────────────────────────
+var _shift_lock       : bool    = false
+var _default_cam_pos  : Vector3 = Vector3.ZERO
+const SHIFT_LOCK_CAM_OFFSET := Vector3(0.6, 0.3, 2.5)
 
 # ── Combo state ───────────────────────────────────────────────────────────────
 ## Current alternating-grab streak.  0 = inactive.
@@ -153,13 +162,16 @@ signal speed_changed(speed: float)
 @onready var left_hand          : Hand        = $Head/LeftHand
 @onready var right_hand         : Hand        = $Head/RightHand
 @onready var torso              : MeshInstance3D = $Torso
+@onready var left_shoulder_socket  : Marker3D = get_node_or_null("LeftShoulderSocket")
+@onready var right_shoulder_socket : Marker3D = get_node_or_null("RightShoulderSocket")
 
 
 func _ready() -> void:
 	# Safety: in multiplayer ensure is_local matches authority even if
-	# setup_network() was somehow missed.
-	if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
-		is_local = is_multiplayer_authority()
+	# setup_network() was somehow missed. Skip if explicitly configured.
+	if not _network_configured:
+		if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
+			is_local = is_multiplayer_authority()
 
 	# Create the floating name label shown above every player.
 	_create_name_label()
@@ -186,6 +198,14 @@ func _ready() -> void:
 	camera.make_current()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	torso.visible = false  # first-person: don't render own body
+	_default_cam_pos = camera.position
+
+	# Register shift-lock input action (Q key).
+	if not InputMap.has_action("shift_lock"):
+		InputMap.add_action("shift_lock")
+		var ev := InputEventKey.new()
+		ev.keycode = KEY_Q
+		InputMap.action_add_event("shift_lock", ev)
 
 	# Apply FOV from GameSettings.
 	if has_node("/root/GameSettings"):
@@ -217,6 +237,7 @@ func _ready() -> void:
 ## Called by main.gd right after instantiation, BEFORE _ready.
 func setup_network(local : bool) -> void:
 	is_local = local
+	_network_configured = true
 
 
 ## Creates the floating name label shown above this player.
@@ -233,6 +254,12 @@ func _create_name_label() -> void:
 	name_lbl.modulate = Color.WHITE
 	if has_node("/root/GameLobby"):
 		name_lbl.text = GameLobby.display_name(peer_id)
+		# Keep label up-to-date if the host deduplicates this player's name later.
+		GameLobby.player_renamed.connect(
+			func(renamed_id: int, new_name: String) -> void:
+				if renamed_id == peer_id and is_instance_valid(name_lbl):
+					name_lbl.text = new_name
+		)
 	else:
 		name_lbl.text = "Player %d" % peer_id
 	add_child(name_lbl)
@@ -240,6 +267,14 @@ func _create_name_label() -> void:
 
 func _input(event: InputEvent) -> void:
 	if not is_local or is_dead:
+		return
+
+	# ── Shift-lock toggle (Q) ─────────────────────────────────────────────────
+	if event.is_action_pressed("shift_lock"):
+		_shift_lock = not _shift_lock
+		camera.position = SHIFT_LOCK_CAM_OFFSET if _shift_lock else _default_cam_pos
+		torso.visible = _shift_lock
+		get_viewport().set_input_as_handled()
 		return
 
 	# ── Mouse look ────────────────────────────────────────────────────────────
@@ -282,11 +317,24 @@ func _input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# ── Ball-and-socket shoulder pins ────────────────────────────────────────
+	# Pin each hand's global origin to the torso sides so arms always start
+	# from the shoulders regardless of head rotation.
+	var _basis := global_transform.basis
+	var _lpin := left_shoulder_socket.global_position  if left_shoulder_socket  else global_position + _basis * Vector3(-0.35, 0.9, 0.0)
+	var _rpin := right_shoulder_socket.global_position if right_shoulder_socket else global_position + _basis * Vector3( 0.35, 0.9, 0.0)
+	left_hand.pin_world  = _lpin
+	right_hand.pin_world = _rpin
+
 	# ── Puppet interpolation ─────────────────────────────────────────────────
 	if not is_local:
 		global_position = global_position.lerp(_net_pos, delta * 15.0)
 		rotation.y = lerp_angle(rotation.y, _net_rot_y, delta * 15.0)
 		head.rotation.x = lerp_angle(head.rotation.x, _net_head_x, delta * 15.0)
+		# Recompute pins with the freshly-interpolated position.
+		var _nb := global_transform.basis
+		left_hand.pin_world  = left_shoulder_socket.global_position  if left_shoulder_socket  else global_position + _nb * Vector3(-0.35, 0.9, 0.0)
+		right_hand.pin_world = right_shoulder_socket.global_position if right_shoulder_socket else global_position + _nb * Vector3( 0.35, 0.9, 0.0)
 		return
 
 	if is_dead:
@@ -445,11 +493,12 @@ func _process(delta: float) -> void:
 	if _right_poo_visual != null:
 		right_hand.grab(_right_poo_visual.global_position)
 
-	# Guide free hands to follow the look direction instead of flopping.
+	# Free hands dangle with floppy pendulum physics (don't guide them).
+	# Only poo-holding hands track the look direction.
 	var _look_fwd := -head.global_transform.basis.z
-	if left_hand_state  == HandState.FREE:
+	if left_hand_state  == HandState.HOLDING_POO:
 		left_hand.guide_to(left_hand.global_position + _look_fwd * 0.8)
-	if right_hand_state == HandState.FREE:
+	if right_hand_state == HandState.HOLDING_POO:
 		right_hand.guide_to(right_hand.global_position + _look_fwd * 0.8)
 
 
@@ -490,11 +539,14 @@ func _check_vine_grab() -> void:
 	# Physics pivot = fixed top anchor (verlet node 0, never moves).
 	# Visual hit    = exact surface point the shape struck on the chain.
 	var anchor : Vector3 = vine.grab_point.global_position
-	if Input.is_action_just_pressed("push_left") and left_hand_state == HandState.FREE \
-			and not _left_consumed:
+	# Grab on click OR auto-attach while holding the button (ease of use).
+	var left_want  := (Input.is_action_just_pressed("push_left") or Input.is_action_pressed("push_left")) \
+			and left_hand_state == HandState.FREE and not _left_consumed
+	var right_want := (Input.is_action_just_pressed("push_right") or Input.is_action_pressed("push_right")) \
+			and right_hand_state == HandState.FREE and not _right_consumed
+	if left_want:
 		_grab_vine(vine, true, anchor, hit_point)
-	if Input.is_action_just_pressed("push_right") and right_hand_state == HandState.FREE \
-			and not _right_consumed:
+	if right_want:
 		_grab_vine(vine, false, anchor, hit_point)
 
 
@@ -621,7 +673,10 @@ func _release_hand(is_left: bool) -> void:
 			# Boost in the full 3-D look direction so up/down/left/right all work.
 			var look_dir    := -head.global_transform.basis.z
 			var total_boost := release_boost_mult + _combo * combo_speed_bonus
-			var boosted_spd := minf(spd * total_boost, max_swing_speed * 1.3)
+			# Without combos, cap at base_release_cap for controlled movement.
+			# Each combo step raises the cap so skilled play is rewarded.
+			var cap := base_release_cap + _combo * 1.5
+			var boosted_spd := minf(spd * total_boost, cap)
 			velocity        = look_dir * boosted_spd
 			_fov_pulse      = clampf(boosted_spd * 1.5 + _combo * 1.5, 8.0, 36.0)
 		if _combo_hold_timer > combo_hold_limit:
@@ -880,6 +935,11 @@ func die() -> void:
 	_combo          = 0
 	_last_vine      = null
 	_last_grab_hand = -1
+	# Reset shift-lock on death.
+	if _shift_lock:
+		_shift_lock = false
+		camera.position = _default_cam_pos
+		torso.visible = false
 	if is_local:
 		combo_changed.emit(_combo)
 	if _left_poo_visual:

@@ -38,5 +38,11 @@ theme_override_colors/font_color = Color(1, 0.84, 0.0, 1)
 [node name="Separator" type="HSeparator" parent="Panel/VBox"]
 layout_mode = 2
 
+[node name="TimerLabel" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(1, 0.84, 0.0, 1)
+
 [node name="Rows" type="VBoxContainer" parent="Panel/VBox"]
 layout_mode = 2

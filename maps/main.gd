@@ -102,10 +102,14 @@ func _spawn_mp_player(peer_id : int) -> void:
 	_players_node.add_child(player)
 	_spawned_peers[peer_id] = true
 
-	# Offset spawn positions so players don't overlap.
+	# Place each player on a different platform (if available).
 	var idx : int = _spawned_peers.size() - 1
-	var offset := Vector3(idx * 3.0, 0.0, 0.0)
-	player.global_position = spawn_point.global_position + offset
+	var platforms := _get_platform_positions()
+	if platforms.size() > 0:
+		player.global_position = platforms[idx % platforms.size()] + Vector3(0, 2, 0)
+	else:
+		var offset := Vector3(idx * 3.0, 0.0, 0.0)
+		player.global_position = spawn_point.global_position + offset
 
 	# Wire death signal.
 	player.player_died.connect(_on_player_died.bind(peer_id))
@@ -126,6 +130,17 @@ func _on_peer_left(peer_id : int) -> void:
 	if node:
 		node.queue_free()
 	_spawned_peers.erase(peer_id)
+
+
+## Collect world positions of all platforms in the map's Platforms node.
+func _get_platform_positions() -> Array[Vector3]:
+	var positions : Array[Vector3] = []
+	var plat_node : Node = get_node_or_null("Platforms")
+	if plat_node:
+		for child in plat_node.get_children():
+			if child is StaticBody3D:
+				positions.append(child.global_position)
+	return positions
 
 
 func _on_server_closed() -> void:

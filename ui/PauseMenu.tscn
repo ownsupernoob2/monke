@@ -76,6 +76,17 @@ text = "0.50"
 custom_minimum_size = Vector2(36, 0)
 horizontal_alignment = 2
 
+[node name="FullscreenRow" type="HBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+
+[node name="FullscreenLabel" type="Label" parent="Panel/VBox/FullscreenRow"]
+layout_mode = 2
+text = "Fullscreen"
+custom_minimum_size = Vector2(100, 0)
+
+[node name="FullscreenBtn" type="CheckButton" parent="Panel/VBox/FullscreenRow"]
+layout_mode = 2
+
 [node name="HSeparator2" type="HSeparator" parent="Panel/VBox"]
 layout_mode = 2
 

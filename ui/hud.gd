@@ -63,9 +63,23 @@ func show_death_screen() -> void:
 	starvation_label.visible = false
 
 
-## White = nothing in range. Yellow = vine is grabbable.
+## White = nothing in range.  Bright green + scale-up + ring = vine is grabbable.
+var _vine_targeted : bool = false
+var _vine_pulse_t  : float = 0.0
+
 func set_vine_targeted(targeting: bool) -> void:
-	crosshair.modulate = Color(1.0, 0.9, 0.1) if targeting else Color(1, 1, 1, 0.7)
+	if targeting:
+		crosshair.text = "[ + ]"
+		crosshair.add_theme_font_size_override("font_size", 26)
+		_vine_pulse_t += get_process_delta_time()
+		var pulse := 0.85 + 0.15 * sin(_vine_pulse_t * 6.0)
+		crosshair.modulate = Color(0.2, 1.0, 0.3, pulse)
+	else:
+		crosshair.text = "+"
+		crosshair.add_theme_font_size_override("font_size", 20)
+		crosshair.modulate = Color(1, 1, 1, 0.7)
+		_vine_pulse_t = 0.0
+	_vine_targeted = targeting
 
 
 ## Shows a coloured counter when the chain is 2+; hides it otherwise.

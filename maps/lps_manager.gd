@@ -35,9 +35,9 @@ var _spectate_camera   : Camera3D = null
 var _local_player      : Player   = null      # cached ref to local Player node
 
 # ── Podium ────────────────────────────────────────────────────────────────────
-var _podium_layer  : CanvasLayer = null
-var _podium_label  : Label       = null
-var _scores_label  : Label       = null
+var _podium_layer      : CanvasLayer  = null
+var _podium_label      : Label        = null
+var _scores_container  : HBoxContainer = null
 
 
 func _ready() -> void:
@@ -155,6 +155,8 @@ func _start_round() -> void:
 
 	# Stop spectating from previous round.
 	_stop_spectating()
+	# Disable crocs at round start — re-enabled when overtime begins.
+	_hide_crocs()
 
 	# Update HUD.
 	_update_local_hud_round()
@@ -232,6 +234,8 @@ func _rpc_start_deathmatch() -> void:
 	_reduce_bananas()
 	# Spawn the lava visual on every peer.
 	_spawn_lava_plane()
+	# Overtime: unleash the crocodiles!
+	_enable_crocs()
 
 
 @rpc("authority", "unreliable", "call_local")
@@ -372,14 +376,60 @@ func _show_podium(is_final: bool, round_winner_id: int) -> void:
 		var winner_name := _peer_name(round_winner_id) if round_winner_id >= 0 else "Draw"
 		_podium_label.text = "%s wins Round %d!" % [winner_name, current_round]
 
-	# Build scores text with medal emojis.
-	var medals : Array[String] = ["1st", "2nd", "3rd"]
-	var lines : String = ""
+	# Build score cards – one per player, sorted by rank.
+	_scores_container.get_children().map(func(c: Node) -> void: c.queue_free())
+	var medal_colors : Array[Color] = [
+		Color(1.00, 0.84, 0.00),  # gold
+		Color(0.75, 0.75, 0.75),  # silver
+		Color(0.80, 0.50, 0.20),  # bronze
+	]
+	var rank_labels : Array[String] = ["1ST", "2ND", "3RD"]
 	for i : int in sorted_peers.size():
-		var pid : int = sorted_peers[i]
-		var prefix : String = medals[i] if i < medals.size() else "%dth" % (i + 1)
-		lines += "%s  %s  —  %d pts\n" % [prefix, _peer_name(pid), _scores[pid]]
-	_scores_label.text = lines
+		var pid   : int    = sorted_peers[i]
+		var pname : String = _peer_name(pid)
+		var pts   : int    = _scores[pid]
+		var accent : Color = medal_colors[i] if i < medal_colors.size() else Color.WHITE
+
+		# Card container.
+		var card := PanelContainer.new()
+		card.custom_minimum_size = Vector2(110.0, 0.0)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color       = accent.darkened(0.55)
+		sb.border_color   = accent
+		sb.set_border_width_all(2)
+		sb.set_corner_radius_all(6)
+		card.add_theme_stylebox_override("panel", sb)
+		_scores_container.add_child(card)
+
+		var vbox := VBoxContainer.new()
+		vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		vbox.add_theme_constant_override("separation", 4)
+		card.add_child(vbox)
+
+		# Rank badge.
+		var rank_lbl := Label.new()
+		rank_lbl.text = rank_labels[i] if i < rank_labels.size() else "%dth" % (i + 1)
+		rank_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		rank_lbl.add_theme_font_size_override("font_size", 18)
+		rank_lbl.add_theme_color_override("font_color", accent)
+		vbox.add_child(rank_lbl)
+
+		# Player name.
+		var name_lbl := Label.new()
+		name_lbl.text = pname
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_lbl.add_theme_font_size_override("font_size", 14)
+		name_lbl.add_theme_color_override("font_color", Color.WHITE)
+		name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		vbox.add_child(name_lbl)
+
+		# Score.
+		var pts_lbl := Label.new()
+		pts_lbl.text = "%d pts" % pts
+		pts_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		pts_lbl.add_theme_font_size_override("font_size", 16)
+		pts_lbl.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+		vbox.add_child(pts_lbl)
 
 	_podium_layer.visible = true
 
@@ -504,10 +554,10 @@ func _ensure_podium_ui() -> void:
 
 	var panel := PanelContainer.new()
 	panel.anchors_preset = Control.PRESET_CENTER
-	panel.offset_left = -280.0
-	panel.offset_right = 280.0
-	panel.offset_top = -160.0
-	panel.offset_bottom = 160.0
+	panel.offset_left   = -340.0
+	panel.offset_right  =  340.0
+	panel.offset_top    = -185.0
+	panel.offset_bottom =  185.0
 	_podium_layer.add_child(panel)
 
 	var vbox := VBoxContainer.new()
@@ -520,15 +570,21 @@ func _ensure_podium_ui() -> void:
 	_podium_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
 	vbox.add_child(_podium_label)
 
-	var spacer := Control.new()
-	spacer.custom_minimum_size.y = 20.0
-	vbox.add_child(spacer)
+	var spacer2 := Control.new()
+	spacer2.custom_minimum_size.y = 12.0
+	vbox.add_child(spacer2)
 
-	_scores_label = Label.new()
-	_scores_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_scores_label.add_theme_font_size_override("font_size", 20)
-	_scores_label.add_theme_color_override("font_color", Color.WHITE)
-	vbox.add_child(_scores_label)
+	# Scroll container for score cards (handles many players gracefully).
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0.0, 140.0)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_DISABLED
+	vbox.add_child(scroll)
+
+	_scores_container = HBoxContainer.new()
+	_scores_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	_scores_container.add_theme_constant_override("separation", 8)
+	scroll.add_child(_scores_container)
 
 
 func _animate_podium_camera(winner: Player) -> void:
@@ -637,6 +693,13 @@ func _respawn_all() -> void:
 	if not players_container:
 		return
 	var spawn_pt : Marker3D = get_parent().get_node("SpawnPoint") as Marker3D
+	# Collect platform positions for spread spawning.
+	var platforms : Array[Vector3] = []
+	var plat_node : Node = get_parent().get_node_or_null("Platforms")
+	if plat_node:
+		for child in plat_node.get_children():
+			if child is StaticBody3D:
+				platforms.append(child.global_position)
 	var idx : int = 0
 	for child : Node in players_container.get_children():
 		if child is Player:
@@ -650,8 +713,11 @@ func _respawn_all() -> void:
 			if child.has_node("PuppetBody"):
 				child.get_node("PuppetBody").visible = not child.is_local
 			child.velocity = Vector3.ZERO
-			var offset := Vector3(idx * 3.0, 0.0, 0.0)
-			child.global_position = spawn_pt.global_position + offset
+			if platforms.size() > 0:
+				child.global_position = platforms[idx % platforms.size()] + Vector3(0, 2, 0)
+			else:
+				var offset := Vector3(idx * 3.0, 0.0, 0.0)
+				child.global_position = spawn_pt.global_position + offset
 			if child.is_local:
 				child.hunger = child.max_hunger
 				child.is_starving = false
@@ -709,12 +775,18 @@ func _update_local_hud_alive() -> void:
 func _update_local_hud_timer() -> void:
 	if _local_player and _local_player.hud:
 		_local_player.hud.update_game_timer(_round_timer)
+		var lbl : Label = _local_player.hud.timer_label
+		if lbl:
+			if _round_timer > 0.0 and _round_timer <= 30.0:
+				lbl.add_theme_color_override("font_color", Color(1.0, 0.25, 0.25))
+			else:
+				lbl.remove_theme_color_override("font_color")
 
 
 func _show_round_banner(text: String) -> void:
 	_ensure_podium_ui()
 	_podium_label.text = text
-	_scores_label.text = ""
+	_scores_container.get_children().map(func(c: Node) -> void: c.queue_free())
 	_podium_layer.visible = true
 
 
@@ -729,3 +801,20 @@ func _hide_round_banner() -> void:
 
 func _peer_name(peer_id : int) -> String:
 	return GameLobby.display_name(peer_id)
+
+
+## Disable all Crocodile nodes — called at the start of every LPS round.
+func _hide_crocs() -> void:
+	_set_croc_state(get_parent(), false)
+
+## Re-enable all Crocodile nodes — called when deathmatch/overtime begins.
+func _enable_crocs() -> void:
+	_set_croc_state(get_parent(), true)
+
+func _set_croc_state(node: Node, enabled: bool) -> void:
+	for child : Node in node.get_children():
+		if child is Crocodile:
+			child.process_mode = Node.PROCESS_MODE_INHERIT if enabled else Node.PROCESS_MODE_DISABLED
+			child.visible = enabled
+		else:
+			_set_croc_state(child, enabled)

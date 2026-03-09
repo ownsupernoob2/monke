@@ -1,0 +1,78 @@
+
+TOP PRIORITY - bigger hitbox for tag, fix banana frenzy not working multiplayer ,, fix leaderboard bad implementation label is not great, add death match when timer ends (Add in the enemies when its sudden death (alligator for swamp, jaguar for rainforest, hawks for canyon,)), tutorial, random place spawning, loading screen (wait for EOS), user friendly lobby, public lobby and private lobby.
+Main criticism: too hard
+
+Suggestions:
+WASD movement
+Bigger hitbox
+More vines on some maps beta
+More hunger bar
+Player highlight during tag
+Add team based tag, similar to untitled tag game
+Make it easier by giving boost based on the 
+Different spawn location
+Make vine hitbox bigger
+Visible dynamic cursor
+Each player unique bean color
+Push players
+Grab players
+Add enemies when its sudden death (alligator, jaguar, hawks)
+Zipline in some maps
+Mic up
+Boost when they let go of the vine, speed up with combos.
+Random debuffs that affects all players in a round
+
+
+BUGS need fixing:
+Fix poo
+Fix maps design
+Fix banana frenzy bug
+Fix tag hitbox and  timer
+Fix timer in gameode 
+Remake tag system
+Better ui 
+Fix leaderboard
+
+
+BUFF ideas:
+Blue banana, repulsion You push IT players away from you, and projectiles (poo) 
+Black banana,  (mina style?) wasd speed increase
+Wind banana, air dash ability
+
+
+MAPS ideas:
+Canyon, instead of vines its ropes, not much ropes but alot of opportunity for pushing off of objects, sliding, zipline, main enemy is hawk. Race variant of it
+
+Swamp , filled with vines, not much trees,  main enemy is alligator, race variant of it, the ground 
+
+Moon forest, night time, has alot of trees, medium vines,  branches you can auto lock on and jump off, main enemy is wolves, race variant of it
+Rainforest, Filled with vines, medium trees, similar to swamp, main enemy are jaguars, race variant of it, tarzan sliding on branches.
+
+
+GAMEMODE ideas:
+Speedrun - straight line race, bananas to sabotage
+Ice tag - ripoff of untitled tag game idea
+
+
+
+the lobby text on the cards is too small
+
+
+tutorial/tooltips
+
+frozen bug when tabbed off and tabbing back on (you need to click on the app on the toolbar to be able to move again)
+
+pretty difficult to get moving once you come to a stand still on a vine
+
+there's no difference between grabbing the top of the vine versus the bottom, e.g. you don't need to swing to gain momentum.
+
+you cant read the names on the podium
+
+if you're on the floor with no food in the tag gamemode you are softlocked
+
+looking down after boosting heavily decreases gravity
+
+it's very hard to gain altitude while holding onto a vine
+
+the yellow cursor indicating your ability to grab a vine is difficult to see
+

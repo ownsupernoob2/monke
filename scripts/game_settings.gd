@@ -23,11 +23,16 @@ func lps_clear() -> void:
 	lps_match_complete = false
 
 # ── Player ──────────────────────────────────────────────────
-var player_name : String = "Player"
+var player_name : String = ""
 
 # ── Disconnect message (shown on main menu after kick/host-leave) ───────────
 var disconnect_message : String = ""
+# ── Chat history (persists across scene changes so messages aren’t lost) ──────
+## Each entry: { "type": "msg"|"alert", "sender": String, "text": String }
+var chat_history : Array = []
 
+func clear_chat_history() -> void:
+	chat_history.clear()
 # ── Audio / Video ───────────────────────────────────────────
 var master_volume : float = 1.0   # 0.0 – 1.0
 var music_volume  : float = 0.8

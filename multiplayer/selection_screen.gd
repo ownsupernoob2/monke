@@ -25,6 +25,8 @@ const ALL_BUFFS : Array[String] = [
 	"Monkey Speed", "Vine Master", "Poo Power",
 ]
 
+const PLAYER_SCENE : String = "res://components/Player.tscn"
+
 # ── State ─────────────────────────────────────────────────────────────────────
 enum Phase { INTRO, GAMEMODE, MAP, BUFF, LAUNCHING, LEADERBOARD }
 var current_phase  : int   = Phase.INTRO
@@ -101,6 +103,11 @@ func _ready() -> void:
 	var chat_scene := load("res://ui/Chat.tscn")
 	if chat_scene:
 		add_child(chat_scene.instantiate())
+
+	# Pause menu (Escape key).
+	var pause_scene := load("res://ui/PauseMenu.tscn")
+	if pause_scene:
+		add_child(pause_scene.instantiate())
 
 	# Host-disconnect.
 	GameLobby.server_closed.connect(_on_server_closed)
@@ -296,12 +303,6 @@ func _on_anim_finished(anim_name : StringName) -> void:
 		&"intro_to_gamemode":
 			current_phase = Phase.GAMEMODE
 			_begin_voting_phase()
-		&"pivot_to_map":
-			current_phase = Phase.MAP
-			_begin_voting_phase()
-		&"pivot_to_buff":
-			current_phase = Phase.BUFF
-			_begin_voting_phase()
 
 
 func _begin_voting_phase() -> void:
@@ -392,9 +393,10 @@ func _handle_vote(peer_id : int, card_idx : int) -> void:
 	var synced : Dictionary = _current_votes.duplicate()
 	rpc("_rpc_broadcast_votes", current_phase, synced)
 	_update_vote_displays()
-	# If everyone has voted, finalize immediately.
-	if _current_votes.size() >= GameLobby.players.size():
-		_finalize_current_phase()
+	# If everyone has voted, fast-forward to a 2-second grace period
+	# so players can still change their mind at the last moment.
+	if _current_votes.size() >= GameLobby.players.size() and _phase_timer > 2.0:
+		_phase_timer = 2.0
 
 
 @rpc("authority", "reliable", "call_remote")
@@ -547,15 +549,22 @@ func _advance_phase(phase : int) -> void:
 		Phase.GAMEMODE:
 			title_label.text = "CHOOSE MAP"
 			anim_player.play("pivot_to_map")
+			await anim_player.animation_finished
+			current_phase = Phase.MAP
+			_begin_voting_phase()
 		Phase.MAP:
 			title_label.text = "CHOOSE BUFF"
 			anim_player.play("pivot_to_buff")
+			await anim_player.animation_finished
+			current_phase = Phase.BUFF
+			_begin_voting_phase()
 		Phase.BUFF:
 			title_label.text = ""
 			timer_label.text = ""
 			current_phase = Phase.LAUNCHING
 			anim_player.play("pivot_down")
 			await anim_player.animation_finished
+			await get_tree().create_timer(0.6).timeout
 			_launch_game()
 
 
@@ -583,6 +592,11 @@ func _on_server_closed() -> void:
 		gs.disconnect_message = "Host left the server."
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PHANTOM CAMERA STATION SYSTEM
+# ══════════════════════════════════════════════════════════════════════════════
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -673,10 +687,8 @@ func _populate_leaderboard() -> void:
 	var ranks     : Array[String] = ["1ST", "2ND", "3RD"]
 
 	for i : int in mini(sorted_ids.size(), 3):
-		var pid   : int   = sorted_ids[i]
-		var hue   : float = fmod(float(abs(pid)) * 0.618, 1.0)
-		var col   : Color = Color.from_hsv(hue, 0.75, 0.90)
-		var pts   : int   = scores.get(pid, 0)
+		var pid   : int    = sorted_ids[i]
+		var pts   : int    = scores.get(pid, 0)
 		var pname : String = GameLobby.display_name(pid)
 
 		var root := Node3D.new()
@@ -684,18 +696,28 @@ func _populate_leaderboard() -> void:
 		root.position = Vector3(pod_x[i], pod_top_y[i], 0.0)
 		_leaderboard_station.add_child(root)
 
-		# Capsule mesh (player avatar).
-		var cap_mesh := CapsuleMesh.new()
-		cap_mesh.radius = 0.32
-		cap_mesh.height = 1.4
-		var cap_mat := StandardMaterial3D.new()
-		cap_mat.albedo_color = col
-		cap_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		var cap_inst := MeshInstance3D.new()
-		cap_inst.mesh = cap_mesh
-		cap_inst.material_override = cap_mat
-		cap_inst.position = Vector3(0.0, 0.7, 0.0)
-		root.add_child(cap_inst)
+		# Player model (same pattern as LobbyRoom).
+		var player_scene_res : PackedScene = load(PLAYER_SCENE)
+		if player_scene_res:
+			var puppet : Node = player_scene_res.instantiate()
+			puppet.name = "PlayerModel"
+			puppet.set_multiplayer_authority(pid)  # so NameLabel3D uses correct name
+			puppet.setup_network(false)            # display-only, no camera/input
+			puppet.rotation.y = PI                 # face the camera
+			root.add_child(puppet)
+			puppet.set_process_mode(Node.PROCESS_MODE_DISABLED)
+			# Hide the auto-generated name label — we use info_lbl below instead.
+			var auto_lbl : Node = puppet.get_node_or_null("NameLabel3D")
+			if auto_lbl:
+				auto_lbl.visible = false
+
+			# Continuous 360° spin + up/down tilt (showcase turntable).
+			var spin_tw := create_tween().set_loops()
+			spin_tw.tween_property(puppet, "rotation:y", PI + TAU, 5.0).from(PI)
+			var tilt_tw := create_tween().set_loops()
+			tilt_tw.tween_property(puppet, "rotation:x", 0.35, 1.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			tilt_tw.tween_property(puppet, "rotation:x", -0.35, 1.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			tilt_tw.tween_property(puppet, "rotation:x", 0.0, 1.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 		# Rank badge (1ST / 2ND / 3RD).
 		var rank_lbl := Label3D.new()
@@ -713,7 +735,7 @@ func _populate_leaderboard() -> void:
 		info_lbl.font_size = 46
 		info_lbl.outline_size = 5
 		info_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		info_lbl.position = Vector3(0.0, 1.85, 0.0)
+		info_lbl.position = Vector3(0.0, 2.3, 0.0)
 		info_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		root.add_child(info_lbl)
 
@@ -732,9 +754,8 @@ func _show_leaderboard() -> void:
 	await tw.finished
 
 
-## Sweep the camera from the leaderboard (−π/2) to the map station (+π/2),
-## passing the gamemode station (0) on the way.  Fires-and-forgets; the tween
-## callback starts map voting when the sweep finishes.
+## Sweep the camera from the leaderboard back to the gamemode station.
+## Fires-and-forgets when called by clients, awaited by host.
 func _tween_from_leaderboard_to_gamemode() -> void:
 	var tw := create_tween()
 	tw.set_ease(Tween.EASE_IN_OUT)
