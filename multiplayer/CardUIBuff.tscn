@@ -1,62 +1,62 @@
 [gd_scene format=3 uid="uid://cardui0buff1"]
 
 [node name="CardVP" type="SubViewport"]
-size = Vector2i(256, 360)
+size = Vector2i(384, 540)
 transparent_bg = false
 render_target_update_mode = 3
 
 [node name="Bg" type="ColorRect" parent="."]
-offset_right = 256.0
-offset_bottom = 360.0
+offset_right = 384.0
+offset_bottom = 540.0
 color = Color(0.14, 0.10, 0.02, 1)
 
 [node name="ImgArea" type="ColorRect" parent="."]
-offset_right = 256.0
-offset_bottom = 175.0
+offset_right = 384.0
+offset_bottom = 263.0
 color = Color(0.75, 0.45, 0.05, 1)
 
 [node name="CatLabel" type="Label" parent="."]
-offset_right = 256.0
-offset_bottom = 175.0
+offset_right = 384.0
+offset_bottom = 263.0
 text = "BUFF"
 horizontal_alignment = 1
 vertical_alignment = 1
-theme_override_font_sizes/font_size = 30
+theme_override_font_sizes/font_size = 48
 theme_override_colors/font_color = Color(1, 1, 1, 0.3)
 
 [node name="Thumbnail" type="TextureRect" parent="."]
 visible = false
-offset_right = 256.0
-offset_bottom = 175.0
+offset_right = 384.0
+offset_bottom = 263.0
 expand_mode = 1
 stretch_mode = 6
 
 [node name="Title" type="Label" parent="."]
-offset_left = 4.0
-offset_top = 181.0
-offset_right = 252.0
-offset_bottom = 243.0
+offset_left = 8.0
+offset_top = 272.0
+offset_right = 376.0
+offset_bottom = 364.0
 text = "—"
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 3
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 42
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="Divider" type="ColorRect" parent="."]
-offset_top = 248.0
-offset_right = 256.0
-offset_bottom = 250.0
+offset_top = 372.0
+offset_right = 384.0
+offset_bottom = 375.0
 color = Color(1, 1, 1, 0.18)
 
 [node name="Votes" type="Node2D" parent="."]
-position = Vector2(8, 258)
+position = Vector2(12, 386)
 
 [node name="VoteCount" type="Label" parent="."]
-offset_top = 330.0
-offset_right = 256.0
-offset_bottom = 354.0
+offset_top = 494.0
+offset_right = 384.0
+offset_bottom = 530.0
 text = "0 votes"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 28
 theme_override_colors/font_color = Color(1, 1, 1, 0.7)

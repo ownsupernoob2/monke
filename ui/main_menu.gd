@@ -5,6 +5,13 @@ extends Node3D
 ## Customize tweens the camera to their respective 3D sections.
 
 const SPIN_SPEED := 0.5
+const MONKEY_BOB_AMPLITUDE := 0.16
+const MONKEY_BOB_SPEED := 1.6
+const CAM_IDLE_BOB := 0.1
+const CAM_IDLE_SPEED := 0.6
+const CARD_FLOAT_AMPLITUDE := 0.12
+const CARD_FLOAT_SPEED := 0.9
+const FIREFLY_COUNT := 18
 
 # ── Section layout ────────────────────────────────────────────────────────────
 enum Section { MAIN, SETTINGS, CUSTOMIZE }
@@ -28,23 +35,31 @@ const CARD_ROT_Y := {
 	Section.CUSTOMIZE: 0.0,
 }
 
-const CARD_VP_SIZE    := Vector2i(420, 560)
+const CARD_VP_SIZE    := Vector2i(560, 760)
 const CARD_QUAD_SIZE  := Vector2(3.2, 4.2)
+const SETTINGS_VP_SIZE := Vector2i(600, 820)
+const SETTINGS_QUAD_SIZE := Vector2(3.4, 4.6)
 const TRANSITION_TIME := 0.8
 
 # ── State ─────────────────────────────────────────────────────────────────────
 var _current_section := Section.MAIN
 var _transitioning   := false
+var _fx_time : float = 0.0
 
 # Per-card data: { section, node, viewport, mesh, quad_size }
 var _cards : Array[Dictionary] = []
+var _fireflies : Array[Dictionary] = []
+var _card_base_y : Dictionary = {}
+var _base_cam_pos : Vector3 = Vector3.ZERO
+var _base_cam_rot_x : float = 0.0
+var _base_monkey_y : float = 0.0
 
 # ── .tscn references ─────────────────────────────────────────────────────────
 @onready var camera_pivot         := $CameraPivot
 @onready var monkey_pivot         := $MonkeyPivot
-@onready var _main_card_node      : Node3D = $MainCard
-@onready var _settings_card_node  : Node3D = $SettingsCard
-@onready var _customize_card_node : Node3D = $CustomizeCard
+@onready var _main_card_node      : Node3D = get_node_or_null("MainCard") as Node3D
+@onready var _settings_card_node  : Node3D = get_node_or_null("SettingsCard") as Node3D
+@onready var _customize_card_node : Node3D = get_node_or_null("CustomizeCard") as Node3D
 
 # ── Settings widgets (populated during build) ────────────────────────────────
 var _master_slider     : HSlider  = null
@@ -59,11 +74,19 @@ var _sens_lbl          : Label    = null
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_main_card_node = _ensure_card_node(_main_card_node, Section.MAIN, CARD_VP_SIZE, CARD_QUAD_SIZE)
+	_settings_card_node = _ensure_card_node(_settings_card_node, Section.SETTINGS, SETTINGS_VP_SIZE, SETTINGS_QUAD_SIZE)
+	_customize_card_node = _ensure_card_node(_customize_card_node, Section.CUSTOMIZE, CARD_VP_SIZE, CARD_QUAD_SIZE)
 	_setup_monkey()
 	_build_main_card()
 	_build_settings_card()
 	_build_customize_card()
+	_setup_card_idle_bases()
+	_build_ambient_fx()
 	_build_version_label()
+	_base_cam_pos = camera_pivot.position
+	_base_cam_rot_x = camera_pivot.rotation.x
+	_base_monkey_y = monkey_pivot.position.y
 
 	if has_node("/root/GameSettings"):
 		var gs := get_node("/root/GameSettings")
@@ -73,7 +96,34 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_fx_time += delta
 	monkey_pivot.rotate_y(SPIN_SPEED * delta)
+	monkey_pivot.position.y = _base_monkey_y + sin(_fx_time * MONKEY_BOB_SPEED) * MONKEY_BOB_AMPLITUDE
+
+	# Subtle camera breathing to keep the scene alive.
+	camera_pivot.position.y = _base_cam_pos.y + sin(_fx_time * CAM_IDLE_SPEED) * CAM_IDLE_BOB
+	camera_pivot.rotation.x = _base_cam_rot_x + sin(_fx_time * CAM_IDLE_SPEED * 0.8) * 0.02
+
+	# Cards gently float to feel less rigid.
+	for card_info in _cards:
+		var section : int = card_info.section
+		if not _card_base_y.has(section):
+			continue
+		var node : Node3D = card_info.node
+		var phase := float(section) * 1.7
+		node.position.y = float(_card_base_y[section]) + sin(_fx_time * CARD_FLOAT_SPEED + phase) * CARD_FLOAT_AMPLITUDE
+
+	# Fireflies orbit lazily around the menu focal area.
+	for f in _fireflies:
+		var n : MeshInstance3D = f.node
+		var base : Vector3 = f.base
+		var phase : float = f.phase
+		var radius : float = f.radius
+		n.position = base + Vector3(
+			cos(_fx_time * 0.7 + phase) * radius,
+			sin(_fx_time * 1.1 + phase) * 0.18,
+			sin(_fx_time * 0.6 + phase) * radius
+		)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -96,6 +146,41 @@ func _setup_monkey() -> void:
 				child.material_override = mat
 
 
+func _setup_card_idle_bases() -> void:
+	_card_base_y[Section.MAIN] = _main_card_node.position.y
+	_card_base_y[Section.SETTINGS] = _settings_card_node.position.y
+	_card_base_y[Section.CUSTOMIZE] = _customize_card_node.position.y
+
+
+func _build_ambient_fx() -> void:
+	var glow_mat := StandardMaterial3D.new()
+	glow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow_mat.emission_enabled = true
+	glow_mat.emission = Color(0.72, 1.0, 0.48, 1)
+	glow_mat.emission_energy_multiplier = 1.8
+	glow_mat.albedo_color = Color(0.85, 1.0, 0.65, 1)
+
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.035
+	mesh.height = 0.07
+
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	for i in FIREFLY_COUNT:
+		var fly := MeshInstance3D.new()
+		fly.mesh = mesh
+		fly.material_override = glow_mat
+		var base := Vector3(rng.randf_range(-6.0, 6.0), rng.randf_range(1.1, 4.2), rng.randf_range(-6.0, 6.0))
+		fly.position = base
+		add_child(fly)
+		_fireflies.append({
+			"node": fly,
+			"base": base,
+			"phase": rng.randf_range(0.0, TAU),
+			"radius": rng.randf_range(0.12, 0.42),
+		})
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  CARD HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -103,6 +188,10 @@ func _setup_monkey() -> void:
 func _use_card(section: Section, card: Node3D) -> Dictionary:
 	var vp        : SubViewport    = card.get_node("VP")
 	var mesh_inst : MeshInstance3D = card.get_node("MeshInstance3D")
+	if section == Section.SETTINGS:
+		vp.size = SETTINGS_VP_SIZE
+	else:
+		vp.size = CARD_VP_SIZE
 	call_deferred("_apply_vp_material", mesh_inst, vp)
 	var info := {
 		"section":   section,
@@ -151,10 +240,20 @@ func _create_card(section: Section,
 	return info
 
 
+func _ensure_card_node(existing: Node3D, section: Section,
+		vp_size: Vector2i, quad_size: Vector2) -> Node3D:
+	if existing:
+		return existing
+	var info := _create_card(section, vp_size, quad_size)
+	return info.node as Node3D
+
+
 func _apply_vp_material(mesh_inst: MeshInstance3D, vp: SubViewport) -> void:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_texture = vp.get_texture()
 	mat.uv1_scale = Vector3(-1, 1, 1)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mesh_inst.set_surface_override_material(0, mat)
 
 
@@ -162,30 +261,55 @@ func _styled_button(text: String, parent: Control, font_size: int = 22,
 		color := Color(0.85, 0.9, 0.8)) -> Button:
 	var btn := Button.new()
 	btn.text = text
-	btn.custom_minimum_size = Vector2(300, 44)
+	btn.custom_minimum_size = Vector2(380, 64)
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	btn.add_theme_font_size_override("font_size", font_size)
 	btn.add_theme_color_override("font_color", color)
-	btn.add_theme_color_override("font_hover_color", Color(1, 1, 0.9))
-	btn.add_theme_color_override("font_pressed_color", color * 0.8)
+	btn.add_theme_color_override("font_hover_color", Color(1, 1, 0.95))
+	btn.add_theme_color_override("font_pressed_color", color * 0.85)
 
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.12, 0.28, 0.1, 0.92)
-	sb.border_color = Color(0.3, 0.65, 0.25)
+	sb.bg_color = Color(0.12, 0.28, 0.10, 0.95)
+	sb.border_color = Color(0.35, 0.72, 0.28)
 	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(10)
-	sb.set_content_margin_all(8)
+	sb.border_width_top = 3
+	sb.set_corner_radius_all(12)
+	sb.set_content_margin_all(10)
+	sb.shadow_size = 6
+	sb.shadow_color = Color(0, 0, 0, 0.55)
+	sb.shadow_offset = Vector2(3, 5)
+	sb.expand_margin_bottom = 4
 	btn.add_theme_stylebox_override("normal", sb)
 
-	var hover := sb.duplicate()
-	hover.bg_color = Color(0.18, 0.45, 0.15, 0.95)
-	hover.border_color = Color(0.45, 0.85, 0.35)
+	var hover := sb.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(0.18, 0.44, 0.14, 0.98)
+	hover.border_color = Color(0.50, 0.92, 0.38)
+	hover.shadow_size = 9
+	hover.shadow_color = Color(0.20, 0.70, 0.15, 0.45)
+	hover.shadow_offset = Vector2(3, 7)
 	btn.add_theme_stylebox_override("hover", hover)
 	btn.add_theme_stylebox_override("focus", hover)
 
-	var pressed := sb.duplicate()
-	pressed.bg_color = Color(0.08, 0.18, 0.06, 0.95)
+	var pressed := sb.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color(0.08, 0.18, 0.06, 0.98)
+	pressed.border_color = Color(0.22, 0.50, 0.18)
+	pressed.shadow_size = 2
+	pressed.shadow_offset = Vector2(1, 2)
+	pressed.expand_margin_bottom = 0
 	btn.add_theme_stylebox_override("pressed", pressed)
+
+	btn.mouse_entered.connect(func() -> void:
+		var tw := btn.create_tween()
+		tw.set_ease(Tween.EASE_OUT)
+		tw.set_trans(Tween.TRANS_BACK)
+		tw.tween_property(btn, "scale", Vector2(1.05, 1.05), 0.12)
+	)
+	btn.mouse_exited.connect(func() -> void:
+		var tw := btn.create_tween()
+		tw.set_ease(Tween.EASE_OUT)
+		tw.set_trans(Tween.TRANS_CUBIC)
+		tw.tween_property(btn, "scale", Vector2.ONE, 0.12)
+	)
 
 	parent.add_child(btn)
 	return btn
@@ -204,11 +328,7 @@ func _spacer(parent: Control, height: float) -> void:
 func _build_main_card() -> void:
 	var info := _use_card(Section.MAIN, _main_card_node)
 	var vp : SubViewport = info.viewport
-
-	var bg := ColorRect.new()
-	bg.color = Color(0.05, 0.1, 0.04)
-	bg.size = Vector2(vp.size)
-	vp.add_child(bg)
+	vp.transparent_bg = true
 
 	var vbox := VBoxContainer.new()
 	vbox.size = Vector2(vp.size)
@@ -219,30 +339,35 @@ func _build_main_card() -> void:
 	var title := Label.new()
 	title.text = "MONKE"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 64)
+	title.add_theme_font_size_override("font_size", 80)
 	title.add_theme_color_override("font_color", Color(0.9, 0.78, 0.25))
 	vbox.add_child(title)
 
 	var subtitle := Label.new()
 	subtitle.text = "need banana"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.add_theme_font_size_override("font_size", 14)
+	subtitle.add_theme_font_size_override("font_size", 20)
 	subtitle.add_theme_color_override("font_color", Color(0.55, 0.72, 0.45, 0.85))
 	vbox.add_child(subtitle)
 
-	_spacer(vbox, 20)
+	var pulse := create_tween()
+	pulse.set_loops()
+	pulse.tween_property(title, "modulate", Color(1.0, 0.9, 0.35, 1.0), 0.7)
+	pulse.tween_property(title, "modulate", Color(0.9, 0.78, 0.25, 1.0), 0.7)
 
-	_styled_button("PLAY", vbox).pressed.connect(_on_play)
-	_styled_button("TUTORIAL", vbox).pressed.connect(_on_tutorial)
-	_styled_button("CUSTOMIZE", vbox, 22, Color(0.9, 0.78, 0.25)).pressed.connect(
+	_spacer(vbox, 24)
+
+	_styled_button("PLAY", vbox, 28).pressed.connect(_on_play)
+	_styled_button("TUTORIAL", vbox, 28).pressed.connect(_on_tutorial)
+	_styled_button("CUSTOMIZE", vbox, 28, Color(0.9, 0.78, 0.25)).pressed.connect(
 			func(): _transition_to(Section.CUSTOMIZE))
-	_styled_button("PLAYGROUND", vbox).pressed.connect(_on_playground)
-	_styled_button("SETTINGS", vbox).pressed.connect(
+	_styled_button("PLAYGROUND", vbox, 28).pressed.connect(_on_playground)
+	_styled_button("SETTINGS", vbox, 28).pressed.connect(
 			func(): _transition_to(Section.SETTINGS))
 
 	_spacer(vbox, 8)
 
-	_styled_button("EXIT", vbox, 22, Color(0.85, 0.55, 0.5)).pressed.connect(_on_exit)
+	_styled_button("EXIT", vbox, 28, Color(0.85, 0.55, 0.5)).pressed.connect(_on_exit)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -259,8 +384,8 @@ func _build_settings_card() -> void:
 	vp.add_child(bg)
 
 	var vbox := VBoxContainer.new()
-	vbox.position = Vector2(20, 20)
-	vbox.size = Vector2(vp.size.x - 40, vp.size.y - 40)
+	vbox.position = Vector2(28, 24)
+	vbox.size = Vector2(vp.size.x - 56, vp.size.y - 48)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_theme_constant_override("separation", 14)
 	vp.add_child(vbox)
@@ -268,7 +393,7 @@ func _build_settings_card() -> void:
 	var title := Label.new()
 	title.text = "SETTINGS"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_font_size_override("font_size", 46)
 	title.add_theme_color_override("font_color", Color(0.9, 0.78, 0.25))
 	vbox.add_child(title)
 
@@ -283,13 +408,13 @@ func _build_settings_card() -> void:
 
 	_fullscreen_toggle = CheckBox.new()
 	_fullscreen_toggle.text = "  Fullscreen"
-	_fullscreen_toggle.add_theme_font_size_override("font_size", 16)
+	_fullscreen_toggle.add_theme_font_size_override("font_size", 20)
 	_fullscreen_toggle.add_theme_color_override("font_color", Color(0.85, 0.9, 0.8))
 	vbox.add_child(_fullscreen_toggle)
 
 	_vsync_toggle = CheckBox.new()
 	_vsync_toggle.text = "  VSync"
-	_vsync_toggle.add_theme_font_size_override("font_size", 16)
+	_vsync_toggle.add_theme_font_size_override("font_size", 20)
 	_vsync_toggle.add_theme_color_override("font_color", Color(0.85, 0.9, 0.8))
 	vbox.add_child(_vsync_toggle)
 
@@ -308,8 +433,8 @@ func _build_settings_card() -> void:
 
 	_spacer(vbox, 12)
 
-	_styled_button("APPLY", vbox, 20).pressed.connect(_apply_settings)
-	_styled_button("BACK", vbox, 20).pressed.connect(
+	_styled_button("APPLY", vbox, 24).pressed.connect(_apply_settings)
+	_styled_button("BACK", vbox, 24).pressed.connect(
 			func(): _apply_settings(); _transition_to(Section.MAIN))
 
 
@@ -322,8 +447,8 @@ func _setting_row(parent: Control, label_text: String,
 
 	var lbl := Label.new()
 	lbl.text = label_text
-	lbl.custom_minimum_size.x = 150
-	lbl.add_theme_font_size_override("font_size", 15)
+	lbl.custom_minimum_size.x = 220
+	lbl.add_theme_font_size_override("font_size", 20)
 	lbl.add_theme_color_override("font_color", Color(0.85, 0.9, 0.8))
 	row.add_child(lbl)
 
@@ -332,13 +457,13 @@ func _setting_row(parent: Control, label_text: String,
 	slider.max_value = max_val
 	slider.step = 0.01
 	slider.value = default_val
-	slider.custom_minimum_size = Vector2(120, 20)
+	slider.custom_minimum_size = Vector2(180, 26)
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(slider)
 
 	var val_lbl := Label.new()
-	val_lbl.custom_minimum_size.x = 50
-	val_lbl.add_theme_font_size_override("font_size", 14)
+	val_lbl.custom_minimum_size.x = 66
+	val_lbl.add_theme_font_size_override("font_size", 18)
 	val_lbl.add_theme_color_override("font_color", Color(0.85, 0.9, 0.8))
 	row.add_child(val_lbl)
 
@@ -389,20 +514,20 @@ func _build_customize_card() -> void:
 	var title := Label.new()
 	title.text = "CUSTOMIZE"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_font_size_override("font_size", 46)
 	title.add_theme_color_override("font_color", Color(0.9, 0.78, 0.25))
 	vbox.add_child(title)
 
 	var coming := Label.new()
 	coming.text = "Coming Soon..."
 	coming.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	coming.add_theme_font_size_override("font_size", 20)
+	coming.add_theme_font_size_override("font_size", 26)
 	coming.add_theme_color_override("font_color", Color(0.7, 0.75, 0.65, 0.7))
 	vbox.add_child(coming)
 
 	_spacer(vbox, 30)
 
-	_styled_button("BACK", vbox, 20).pressed.connect(
+	_styled_button("BACK", vbox, 24).pressed.connect(
 			func(): _transition_to(Section.MAIN))
 
 
@@ -532,9 +657,9 @@ func _forward_to_card(event: InputEvent, card_info: Dictionary) -> bool:
 		fwd.position = vp_pos
 		fwd.global_position = vp_pos
 
-	if not vp.is_inside_tree():
+	if not is_instance_valid(vp) or not vp.is_inside_tree() or vp.get_tree() == null:
 		return false
-	vp.push_input(fwd)
+	vp.call_deferred("push_input", fwd)
 	return true
 
 

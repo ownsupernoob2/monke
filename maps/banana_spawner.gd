@@ -26,6 +26,11 @@ extends Node3D
 ## Seconds to wait after a banana is consumed before spawning a replacement.
 @export var respawn_delay  : float = 5.0
 
+## ── Buff bananas ─────────────────────────────────────────────────────────────
+## Probability (0–1) that a spawned banana carries the selected round buff.
+## 0 = all regular; 1 = all buff bananas.
+@export var buff_spawn_chance : float = 0.25
+
 # ── Runtime ─────────────────────────────────────────────────────────────────────
 var _rng       := RandomNumberGenerator.new()
 var _container : Node3D
@@ -52,6 +57,14 @@ func _spawn_one() -> void:
 
 	var banana : Node = banana_scene.instantiate()
 	banana.position = pos
+	# Assign the currently selected buff to a subset of spawned bananas.
+	if buff_spawn_chance > 0.0 and _rng.randf() < buff_spawn_chance:
+		var gs : Node = get_node_or_null("/root/GameSettings")
+		var selected_buff := ""
+		if gs != null:
+			selected_buff = str(gs.selected_buff)
+		if selected_buff != "":
+			banana.buff_type = selected_buff
 	_container.add_child(banana)
 	_bananas.append(banana)
 

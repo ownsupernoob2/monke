@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://maps/shaders/swamp_touch_ripple.gdshader" id="1"]
+
+[resource]
+shader = ExtResource("1")
+shader_parameter/base_color = Color(0.08, 0.35, 0.42, 0.68)
+shader_parameter/ripple_center_world = Vector2(0, 0)
+shader_parameter/ripple_time = 999.0
+shader_parameter/ripple_lifetime = 2.2
+shader_parameter/ripple_speed = 6.0
+shader_parameter/ripple_frequency = 8.0
+shader_parameter/ripple_falloff = 0.45
+shader_parameter/ripple_height = 0.10

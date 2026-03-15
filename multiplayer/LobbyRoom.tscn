@@ -70,6 +70,11 @@ tooltip_text = "Copy room code to clipboard"
 theme_override_font_sizes/font_size = 14
 visible = false
 
+[node name="PublicToggle" type="CheckBox" parent="UILayer/TopBar"]
+layout_mode = 2
+text = "Public Lobby"
+theme_override_font_sizes/font_size = 14
+
 [node name="BottomBar" type="HBoxContainer" parent="UILayer"]
 anchors_preset = 12
 anchor_top = 1.0

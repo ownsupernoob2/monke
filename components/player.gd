@@ -6,7 +6,7 @@ const GRAVITY           := 9.8
 
 # ── Hunger settings (tweak in the Inspector) ──────────────────────────────────
 @export var max_hunger             : float = 100.0
-@export var hunger_drain_rate      : float = 1.25  ## units drained per second (1 per 0.8 s)
+@export var hunger_drain_rate      : float = 0.65  ## gentler beginner drain
 @export var starvation_death_delay : float = 10.0  ## seconds at zero before death
 
 # ── Push settings (tweak in the Inspector) ────────────────────────────────────
@@ -14,6 +14,8 @@ const GRAVITY           := 9.8
 @export var push_force     : float = 10.0
 ## Minimum seconds between successive pushes on the same hand.
 @export var push_cooldown  : float = 0.35
+## Fraction of max hunger consumed per hand push.
+@export var push_hunger_cost_pct : float = 0.02
 ## Horizontal speed multiplier per physics frame while on the floor.
 ## 0.85^60fps ≈ stops in ~0.5 s – gives a crisp "planted" feel.
 @export var floor_friction : float = 0.85
@@ -61,10 +63,20 @@ const GRAVITY           := 9.8
 # ── Poo system (tweak in the Inspector) ──────────────────────────────────────────
 ## Poo projectile scene – assigned via the Inspector (or Player.tscn).
 @export var poo_scene       : PackedScene
+## Temporary toggle while poo is being reworked.
+@export var poo_enabled     : bool = false
 ## Hunger consumed when creating a poo.  Fails silently if hunger is below this.
 @export var poo_hunger_cost : float = 10.0
 ## Launch speed of a thrown poo (m/s).
 @export var poo_throw_force : float = 22.0
+@export var black_speed_multiplier : float = 1.22
+@export var blue_repulsion_force_mult : float = 1.75
+@export var wind_dash_force : float = 12.5
+@export var wind_dash_upward_boost : float = 2.2
+
+const EFFECT_DURATION : float = 10.0
+const ATTRACTION_RADIUS : float = 5.0
+const ATTRACTION_PULL_SPEED : float = 4.5
 
 # ── Multiplayer state ─────────────────────────────────────────────────────────
 ## True = this is the local player (gets camera/input). False = network puppet.
@@ -74,6 +86,10 @@ var _network_configured : bool = false
 var _net_pos    : Vector3 = Vector3.ZERO  # target pos from authority
 var _net_rot_y  : float   = 0.0          # target Y rotation
 var _net_head_x : float   = 0.0          # target head pitch
+var _net_left_grab : bool = false
+var _net_right_grab : bool = false
+var _net_left_grab_pos : Vector3 = Vector3.ZERO
+var _net_right_grab_pos : Vector3 = Vector3.ZERO
 
 # ── Runtime state ─────────────────────────────────────────────────────────────
 var hunger      : float = 100.0
@@ -109,6 +125,19 @@ var _right_vine : Vine = null
 
 ## Extra FOV degrees injected on a timed release; decays to 0 each frame.
 var _fov_pulse : float = 0.0
+var _active_buff : String = ""
+var _buff_outline : MeshInstance3D = null
+var _role_outline : MeshInstance3D = null
+var _effect_timers : Dictionary = {}
+var _effect_stacks : Dictionary = {}
+var _effect_aura : MeshInstance3D = null
+var _aura_time : float = 0.0
+var _base_push_force : float = 0.0
+var _base_release_cap : float = 0.0
+var _base_max_swing_speed : float = 0.0
+var _base_swing_launch_speed : float = 0.0
+var _wind_dash_ready : bool = true
+var _wind_dash_cooldown : float = 0.0
 
 # ── Shift-lock (third-person) ─────────────────────────────────────────────────
 var _shift_lock       : bool    = false
@@ -207,6 +236,19 @@ func _ready() -> void:
 		ev.keycode = KEY_Q
 		InputMap.action_add_event("shift_lock", ev)
 
+	# Wind Banana input action (Space).
+	if not InputMap.has_action("air_dash"):
+		InputMap.add_action("air_dash")
+		var dash_ev := InputEventKey.new()
+		dash_ev.keycode = KEY_SPACE
+		InputMap.action_add_event("air_dash", dash_ev)
+
+	_base_push_force = push_force
+	_base_release_cap = base_release_cap
+	_base_max_swing_speed = max_swing_speed
+	_base_swing_launch_speed = swing_launch_speed
+	_clear_effects()
+
 	# Apply FOV from GameSettings.
 	if has_node("/root/GameSettings"):
 		var gs : Node = get_node("/root/GameSettings")
@@ -274,6 +316,8 @@ func _input(event: InputEvent) -> void:
 		_shift_lock = not _shift_lock
 		camera.position = SHIFT_LOCK_CAM_OFFSET if _shift_lock else _default_cam_pos
 		torso.visible = _shift_lock
+		if _buff_outline and is_instance_valid(_buff_outline):
+			_buff_outline.visible = _shift_lock
 		get_viewport().set_input_as_handled()
 		return
 
@@ -293,27 +337,28 @@ func _input(event: InputEvent) -> void:
 	#   • (holding poo handled below regardless of window)
 	# Any tap while that hand is HOLDING_POO = throw immediately.
 	# Setting _*_consumed = true blocks vine grab / push for this input event.
-	if event.is_action_pressed("push_left"):
-		if left_hand_state == HandState.HOLDING_POO:
-			_throw_poo(true)
-			_left_consumed = true
-		elif _left_dtap_timer > 0.0 and left_hand_state == HandState.FREE:
-			_try_create_poo(true)
-			_left_consumed  = true
-			_left_dtap_timer = 0.0
-		else:
-			_left_dtap_timer = DTAP_WINDOW
+	if poo_enabled:
+		if event.is_action_pressed("push_left"):
+			if left_hand_state == HandState.HOLDING_POO:
+				_throw_poo(true)
+				_left_consumed = true
+			elif _left_dtap_timer > 0.0 and left_hand_state == HandState.FREE:
+				_try_create_poo(true)
+				_left_consumed  = true
+				_left_dtap_timer = 0.0
+			else:
+				_left_dtap_timer = DTAP_WINDOW
 
-	if event.is_action_pressed("push_right"):
-		if right_hand_state == HandState.HOLDING_POO:
-			_throw_poo(false)
-			_right_consumed = true
-		elif _right_dtap_timer > 0.0 and right_hand_state == HandState.FREE:
-			_try_create_poo(false)
-			_right_consumed  = true
-			_right_dtap_timer = 0.0
-		else:
-			_right_dtap_timer = DTAP_WINDOW
+		if event.is_action_pressed("push_right"):
+			if right_hand_state == HandState.HOLDING_POO:
+				_throw_poo(false)
+				_right_consumed = true
+			elif _right_dtap_timer > 0.0 and right_hand_state == HandState.FREE:
+				_try_create_poo(false)
+				_right_consumed  = true
+				_right_dtap_timer = 0.0
+			else:
+				_right_dtap_timer = DTAP_WINDOW
 
 
 func _physics_process(delta: float) -> void:
@@ -335,10 +380,33 @@ func _physics_process(delta: float) -> void:
 		var _nb := global_transform.basis
 		left_hand.pin_world  = left_shoulder_socket.global_position  if left_shoulder_socket  else global_position + _nb * Vector3(-0.35, 0.9, 0.0)
 		right_hand.pin_world = right_shoulder_socket.global_position if right_shoulder_socket else global_position + _nb * Vector3( 0.35, 0.9, 0.0)
+		# Keep remote hand targets alive between packets so arm stretch stays smooth.
+		if _net_left_grab:
+			if left_hand_state != HandState.GRABBING:
+				left_hand.grab(_net_left_grab_pos)
+			else:
+				left_hand.update_grab_pos(_net_left_grab_pos)
+			left_hand_state = HandState.GRABBING
+		elif left_hand_state == HandState.GRABBING:
+			left_hand.release()
+			left_hand_state = HandState.FREE
+		if _net_right_grab:
+			if right_hand_state != HandState.GRABBING:
+				right_hand.grab(_net_right_grab_pos)
+			else:
+				right_hand.update_grab_pos(_net_right_grab_pos)
+			right_hand_state = HandState.GRABBING
+		elif right_hand_state == HandState.GRABBING:
+			right_hand.release()
+			right_hand_state = HandState.FREE
+		_tick_effects(delta)
+		_update_effect_aura(delta)
 		return
 
 	if is_dead:
 		return
+	if not poo_enabled:
+		_clear_held_poo()
 
 	# ── 1. Release check ──────────────────────────────────────────────────────
 	if Input.is_action_just_released("push_left") and left_hand_state == HandState.GRABBING:
@@ -355,6 +423,12 @@ func _physics_process(delta: float) -> void:
 	# ── 4. Gravity (applies in both swing and free-flight) ─────────────────────
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
+
+	if is_on_floor() or _is_grabbing():
+		_wind_dash_ready = true
+	_wind_dash_cooldown = maxf(_wind_dash_cooldown - delta, 0.0)
+	_tick_effects(delta)
+	_apply_attraction(delta)
 
 	# ── 5. Swinging branch ────────────────────────────────────────────────────
 	if _is_grabbing():
@@ -438,6 +512,7 @@ func _physics_process(delta: float) -> void:
 		velocity.z *= air_damping
 
 	_handle_push()
+	_handle_wind_dash()
 	move_and_slide()
 	_check_player_collisions()
 	_left_consumed  = false
@@ -449,14 +524,19 @@ func _process(delta: float) -> void:
 		return
 	if is_dead:
 		return
+	_update_effect_aura(delta)
+	_update_effect_ui()
 
 	# Send our position and hand state to all other peers every frame.
 	if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
 		var _l_grab := left_hand_state == HandState.GRABBING
 		var _r_grab := right_hand_state == HandState.GRABBING
+		var stacks : int = int(_effect_stacks.get(_active_buff, 0)) if _active_buff != "" else 0
+		var time_left : float = float(_effect_timers.get(_active_buff, 0.0)) if _active_buff != "" else 0.0
 		rpc("_rpc_sync_transform", global_position, rotation.y, head.rotation.x,
 			_l_grab, left_hand._grab_world if _l_grab else Vector3.ZERO,
-			_r_grab, right_hand._grab_world if _r_grab else Vector3.ZERO)
+			_r_grab, right_hand._grab_world if _r_grab else Vector3.ZERO,
+			_active_buff, int(stacks), float(time_left))
 
 	_tick_hunger(delta)
 	# Stream live countdown to HUD every frame while the timer is running.
@@ -554,7 +634,7 @@ func _check_vine_grab() -> void:
 ## Averages valid push directions and scales force by hand count (1 or 2 hands).
 func _handle_push() -> void:
 	# Cannot push with empty hunger – no energy.
-	if hunger <= 0.0:
+	if _hunger_enabled and hunger <= 0.0:
 		return
 	var push_dirs : Array[Vector3] = []
 
@@ -580,9 +660,10 @@ func _handle_push() -> void:
 		combined += d
 	velocity += combined.normalized() * push_force * push_dirs.size()
 
-	# Each hand push costs 5 % of max hunger (double push = 10 %).
-	hunger = clampf(hunger - push_dirs.size() * 0.05 * max_hunger, 0.0, max_hunger)
-	hunger_changed.emit(hunger, max_hunger)
+	# Optional hunger cost for pushes.
+	if _hunger_enabled:
+		hunger = clampf(hunger - push_dirs.size() * push_hunger_cost_pct * max_hunger, 0.0, max_hunger)
+		hunger_changed.emit(hunger, max_hunger)
 
 
 
@@ -663,22 +744,17 @@ func _grab_vine(vine: Vine, is_left: bool, anchor: Vector3, hit_point: Vector3) 
 func _release_hand(is_left: bool) -> void:
 	# ── Release boost ──────────────────────────────────────────────────────
 	# Fires only when the LAST hand releases (the true launch moment).
-	# Boost is applied strictly along the current horizontal travel direction
-	# so it always feels like a clean push forward, never sideways.
+	# Release always snaps to a guaranteed launch speed, so even low-momentum
+	# players regain control immediately. Combo increases that guaranteed speed.
 	var other_grabbing := (right_hand_state == HandState.GRABBING) if is_left \
 						else (left_hand_state  == HandState.GRABBING)
 	if not other_grabbing:
-		var spd := velocity.length()
-		if spd > 0.1:
-			# Boost in the full 3-D look direction so up/down/left/right all work.
-			var look_dir    := -head.global_transform.basis.z
-			var total_boost := release_boost_mult + _combo * combo_speed_bonus
-			# Without combos, cap at base_release_cap for controlled movement.
-			# Each combo step raises the cap so skilled play is rewarded.
-			var cap := base_release_cap + _combo * 1.5
-			var boosted_spd := minf(spd * total_boost, cap)
-			velocity        = look_dir * boosted_spd
-			_fov_pulse      = clampf(boosted_spd * 1.5 + _combo * 1.5, 8.0, 36.0)
+		# Base launch speed is always guaranteed, independent of prior velocity.
+		# Combo unlocks additional speed above that base.
+		var look_dir := (-head.global_transform.basis.z).normalized()
+		var release_spd := base_release_cap + _combo * 1.5
+		velocity = look_dir * release_spd
+		_fov_pulse = clampf(release_spd * 1.5 + _combo * 1.5, 8.0, 36.0)
 		if _combo_hold_timer > combo_hold_limit:
 			_combo = 0
 			combo_changed.emit(_combo)
@@ -792,16 +868,41 @@ func _check_player_collisions() -> void:
 		if dir.length_squared() < 0.001:
 			dir = -global_transform.basis.z  # fallback: push in facing dir
 		dir = dir.normalized()
-		const BUMP_FORCE : float = 4.5
+		var bump_force : float = 4.5
+		var self_recoil_mult : float = 0.5
+		if _active_buff == "Repulsor" and _is_tag_it_peer(other.get_multiplayer_authority()):
+			var stacks := int(_effect_stacks.get("Repulsor", 1))
+			bump_force *= blue_repulsion_force_mult + float(maxi(stacks - 1, 0)) * 0.20
+			self_recoil_mult = 0.18
 		# Push self backward.
-		velocity += -dir * BUMP_FORCE * 0.5
+		velocity += -dir * bump_force * self_recoil_mult
 		# Ask the other player's authoritative machine to apply the forward push.
-		other.rpc_id(other.get_multiplayer_authority(), "receive_push", dir, BUMP_FORCE)
+		other.rpc_id(other.get_multiplayer_authority(), "receive_push", dir, bump_force)
+
+
+func _handle_wind_dash() -> void:
+	if _active_buff != "Wind Rider":
+		return
+	if is_on_floor() or _is_grabbing():
+		return
+	if not _wind_dash_ready or _wind_dash_cooldown > 0.0:
+		return
+	if not Input.is_action_just_pressed("air_dash"):
+		return
+	var stacks := int(_effect_stacks.get("Wind Rider", 1))
+	var dir := (-head.global_transform.basis.z).normalized()
+	velocity += dir * (wind_dash_force + float(maxi(stacks - 1, 0)) * 1.4)
+	velocity.y = maxf(velocity.y, 0.0) + wind_dash_upward_boost
+	_wind_dash_ready = false
+	_wind_dash_cooldown = 0.35
+	_fov_pulse = maxf(_fov_pulse, 10.0)
 
 
 # ── Poo creation / throw ─────────────────────────────────────────────────────
 
 func _try_create_poo(is_left: bool) -> void:
+	if not poo_enabled:
+		return
 	if hunger < poo_hunger_cost:
 		return
 	# Already holding a poo in this hand – can't stack.
@@ -836,6 +937,8 @@ func _try_create_poo(is_left: bool) -> void:
 
 
 func _throw_poo(is_left: bool) -> void:
+	if not poo_enabled:
+		return
 	var visual := _left_poo_visual if is_left else _right_poo_visual
 	if visual == null:
 		return
@@ -904,6 +1007,8 @@ func set_hunger_enabled(enabled: bool) -> void:
 			starvation_tick.emit(0.0)
 		if hud and hud.has_node("Control/TopLeft"):
 			hud.get_node("Control/TopLeft").visible = false
+	elif hud and hud.has_node("Control/TopLeft"):
+		hud.get_node("Control/TopLeft").visible = true
 
 
 ## Disable only the passive hunger drain; ability costs (poo, push) still apply.
@@ -924,14 +1029,254 @@ func receive_push(direction: Vector3, force: float) -> void:
 	velocity += direction * force
 
 
+func _is_tag_it_peer(peer_id: int) -> bool:
+	var parent_node : Node = get_parent()
+	if parent_node == null:
+		return false
+	var main_node : Node = parent_node.get_parent()
+	if main_node == null or not main_node.has_node("TagManager"):
+		return false
+	var tag_mgr : Node = main_node.get_node("TagManager")
+	if not tag_mgr.has_method("is_it_peer"):
+		return false
+	return bool(tag_mgr.call("is_it_peer", peer_id))
+
+
+func has_buff(buff_name: String) -> bool:
+	return float(_effect_timers.get(buff_name, 0.0)) > 0.0
+
+
+func _clear_effects() -> void:
+	_effect_timers.clear()
+	_effect_stacks.clear()
+	_active_buff = ""
+	if _effect_aura and is_instance_valid(_effect_aura):
+		_effect_aura.visible = false
+	_recompute_effect_stats()
+	_update_buff_outline()
+	if hud != null and hud.has_method("set_buff_hint"):
+		hud.set_buff_hint("")
+	_update_effect_ui()
+
+
+func apply_buff(buff_name: String) -> void:
+	if buff_name == "":
+		return
+	_active_buff = buff_name
+	var stacks := int(_effect_stacks.get(buff_name, 0)) + 1
+	_effect_stacks[buff_name] = stacks
+	_effect_timers[buff_name] = EFFECT_DURATION
+	_recompute_effect_stats()
+	_update_effect_ui()
+	_update_effect_aura(0.0)
+	if hud != null and hud.has_method("set_buff_hint"):
+		hud.set_buff_hint(_active_buff)
+	_update_buff_outline()
+
+
+func _tick_effects(delta: float) -> void:
+	if _effect_timers.is_empty():
+		return
+	var prev_active := _active_buff
+	var expired : Array[String] = []
+	for key in _effect_timers.keys():
+		var effect_name := str(key)
+		var t := float(_effect_timers[effect_name]) - delta
+		if t <= 0.0:
+			expired.append(effect_name)
+		else:
+			_effect_timers[effect_name] = t
+	for effect_name in expired:
+		_effect_timers.erase(effect_name)
+		_effect_stacks.erase(effect_name)
+	if _active_buff == "" or not _effect_timers.has(_active_buff):
+		_active_buff = ""
+		var best_t := -1.0
+		for key in _effect_timers.keys():
+			var effect_name := str(key)
+			var t := float(_effect_timers[effect_name])
+			if t > best_t:
+				best_t = t
+				_active_buff = effect_name
+	_recompute_effect_stats()
+	if prev_active != _active_buff or expired.size() > 0:
+		if hud != null and hud.has_method("set_buff_hint"):
+			hud.set_buff_hint(_active_buff)
+		_update_buff_outline()
+	_update_effect_ui()
+
+
+func _recompute_effect_stats() -> void:
+	push_force = _base_push_force
+	base_release_cap = _base_release_cap
+	max_swing_speed = _base_max_swing_speed
+	swing_launch_speed = _base_swing_launch_speed
+	if has_buff("Monkey Speed"):
+		var stacks := int(_effect_stacks.get("Monkey Speed", 1))
+		var mult := black_speed_multiplier + float(maxi(stacks - 1, 0)) * 0.10
+		push_force *= mult
+		base_release_cap *= mult
+		max_swing_speed *= mult
+		swing_launch_speed *= mult
+
+
+func _update_effect_ui() -> void:
+	if hud == null or not hud.has_method("set_effects"):
+		return
+	var rows : Array[Dictionary] = []
+	for key in _effect_timers.keys():
+		var effect_name := str(key)
+		rows.append({
+			"name": effect_name,
+			"stacks": int(_effect_stacks.get(effect_name, 1)),
+			"time_left": float(_effect_timers.get(effect_name, 0.0)),
+		})
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("time_left", 0.0)) > float(b.get("time_left", 0.0)))
+	hud.set_effects(rows)
+
+
+func _apply_attraction(delta: float) -> void:
+	if not is_local or not has_buff("Attraction"):
+		return
+	var stacks := int(_effect_stacks.get("Attraction", 1))
+	var pull_speed := ATTRACTION_PULL_SPEED + float(maxi(stacks - 1, 0)) * 0.8
+	for n in get_tree().get_nodes_in_group("bananas"):
+		if not (n is Node3D):
+			continue
+		var banana := n as Node3D
+		var to_player := global_position - banana.global_position
+		var dist := to_player.length()
+		if dist <= 0.05 or dist > ATTRACTION_RADIUS:
+			continue
+		banana.global_position += to_player.normalized() * pull_speed * delta
+
+
+func _get_buff_color(buff: String) -> Color:
+	match buff:
+		"Repulsor":     return Color(0.20, 0.62, 1.0)
+		"Attraction":   return Color(0.93, 0.35, 0.55)
+		"Monkey Speed": return Color(0.60, 0.20, 0.90)
+		"Wind Rider":   return Color(0.45, 1.0, 0.72)
+		_:              return Color(1.0, 1.0, 1.0)
+
+
+func _update_effect_aura(delta: float) -> void:
+	if _active_buff == "":
+		if _effect_aura and is_instance_valid(_effect_aura):
+			_effect_aura.visible = false
+		return
+	if torso == null:
+		return
+	if _effect_aura == null or not is_instance_valid(_effect_aura):
+		var ring := MeshInstance3D.new()
+		var mesh := SphereMesh.new()
+		mesh.radius = 0.72
+		mesh.height = 1.44
+		ring.mesh = mesh
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mat.albedo_color = Color(1, 1, 1, 0.14)
+		mat.emission_enabled = true
+		mat.emission_energy_multiplier = 2.2
+		ring.material_override = mat
+		torso.add_child(ring)
+		_effect_aura = ring
+	_aura_time += delta
+	var c := _get_buff_color(_active_buff)
+	var stacks := int(_effect_stacks.get(_active_buff, 1))
+	if _effect_aura.material_override is StandardMaterial3D:
+		var m := _effect_aura.material_override as StandardMaterial3D
+		m.albedo_color = Color(c.r, c.g, c.b, 0.12)
+		m.emission = c
+		m.emission_energy_multiplier = 2.2 + float(maxi(stacks - 1, 0)) * 0.35
+	_effect_aura.visible = not is_dead
+	var pulse := 1.0 + sin(_aura_time * 5.0) * 0.08
+	_effect_aura.scale = Vector3.ONE * pulse
+
+
+func _update_buff_outline() -> void:
+	if _buff_outline and is_instance_valid(_buff_outline):
+		_buff_outline.queue_free()
+		_buff_outline = null
+	if _active_buff == "":
+		return
+	if torso == null or torso.mesh == null:
+		return
+	var outline := MeshInstance3D.new()
+	outline.mesh = torso.mesh
+	outline.scale = Vector3(1.12, 1.12, 1.12)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.cull_mode = BaseMaterial3D.CULL_FRONT
+	mat.albedo_color = _get_buff_color(_active_buff)
+	mat.emission_enabled = true
+	mat.emission = _get_buff_color(_active_buff)
+	mat.emission_energy_multiplier = 1.8
+	outline.material_override = mat
+	torso.add_child(outline)
+	_buff_outline = outline
+	_buff_outline.visible = (not is_local) or _shift_lock
+
+
+func set_role_outline(enabled: bool, color: Color = Color.WHITE) -> void:
+	if not enabled:
+		if _role_outline and is_instance_valid(_role_outline):
+			_role_outline.queue_free()
+			_role_outline = null
+		return
+	if torso == null or torso.mesh == null:
+		return
+	if _role_outline == null or not is_instance_valid(_role_outline):
+		var outline := MeshInstance3D.new()
+		outline.mesh = torso.mesh
+		outline.scale = Vector3(1.18, 1.18, 1.18)
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.cull_mode = BaseMaterial3D.CULL_FRONT
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.set_flag(BaseMaterial3D.FLAG_DISABLE_DEPTH_TEST, true)
+		mat.albedo_color = Color(color.r, color.g, color.b, 0.90)
+		mat.emission_enabled = true
+		mat.emission = color
+		mat.emission_energy_multiplier = 2.2
+		outline.material_override = mat
+		torso.add_child(outline)
+		_role_outline = outline
+	if _role_outline.material_override is StandardMaterial3D:
+		var rmat := _role_outline.material_override as StandardMaterial3D
+		rmat.albedo_color = Color(color.r, color.g, color.b, 0.90)
+		rmat.emission = color
+	_role_outline.visible = true
+
+
 func _on_death_timer_timeout() -> void:
 	die()
+
+
+func _clear_held_poo() -> void:
+	if _left_poo_visual:
+		_left_poo_visual.queue_free()
+		_left_poo_visual = null
+	if _right_poo_visual:
+		_right_poo_visual.queue_free()
+		_right_poo_visual = null
+	if left_hand_state == HandState.HOLDING_POO:
+		left_hand_state = HandState.FREE
+		left_hand.release()
+	if right_hand_state == HandState.HOLDING_POO:
+		right_hand_state = HandState.FREE
+		right_hand.release()
 
 
 func die() -> void:
 	if is_dead:
 		return
 	is_dead = true
+	set_role_outline(false)
+	_clear_effects()
 	_combo          = 0
 	_last_vine      = null
 	_last_grab_hand = -1
@@ -969,6 +1314,8 @@ func die() -> void:
 func _rpc_die() -> void:
 	if not is_dead:
 		is_dead = true
+		set_role_outline(false)
+		_clear_effects()
 		if head:
 			head.visible = false
 		torso.visible = false
@@ -982,20 +1329,23 @@ func _rpc_die() -> void:
 
 @rpc("any_peer", "unreliable_ordered", "call_remote")
 func _rpc_sync_transform(pos: Vector3, rot_y: float, head_x: float,
-		l_grab: bool, l_grab_pos: Vector3, r_grab: bool, r_grab_pos: Vector3) -> void:
+		l_grab: bool, l_grab_pos: Vector3, r_grab: bool, r_grab_pos: Vector3,
+		active_buff: String, active_stacks: int, active_time_left: float) -> void:
 	_net_pos    = pos
 	_net_rot_y  = rot_y
 	_net_head_x = head_x
-	# Sync hand grab state so remote arms visually reach toward the vine.
-	if l_grab:
-		left_hand.grab(l_grab_pos)
-		left_hand_state = HandState.GRABBING
-	elif left_hand_state == HandState.GRABBING:
-		left_hand.release()
-		left_hand_state = HandState.FREE
-	if r_grab:
-		right_hand.grab(r_grab_pos)
-		right_hand_state = HandState.GRABBING
-	elif right_hand_state == HandState.GRABBING:
-		right_hand.release()
-		right_hand_state = HandState.FREE
+	_net_left_grab = l_grab
+	_net_right_grab = r_grab
+	_net_left_grab_pos = l_grab_pos
+	_net_right_grab_pos = r_grab_pos
+	if active_buff != "" and active_time_left > 0.0:
+		var buff_changed := _active_buff != active_buff
+		_active_buff = active_buff
+		_effect_stacks[active_buff] = maxi(active_stacks, 1)
+		_effect_timers[active_buff] = maxf(float(_effect_timers.get(active_buff, 0.0)), active_time_left)
+		_recompute_effect_stats()
+		if buff_changed:
+			_update_buff_outline()
+		_update_effect_aura(0.0)
+	elif active_buff == "" and not _effect_timers.is_empty():
+		_clear_effects()

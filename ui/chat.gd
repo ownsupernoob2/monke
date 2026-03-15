@@ -24,7 +24,6 @@ func _ready() -> void:
 	panel.modulate.a = 0.4
 
 	if has_node("/root/GameLobby"):
-		var lobby : Node = get_node("/root/GameLobby")
 		GameLobby.chat_received.connect(_on_chat_received)
 		GameLobby.server_closed.connect(_on_server_closed)
 		GameLobby.alert_received.connect(_on_alert_received)
@@ -40,6 +39,10 @@ func _ready() -> void:
 				_add_alert_no_save(entry.get("text", ""))
 			else:
 				_add_message_no_save(entry.get("sender", ""), entry.get("text", ""))
+		if gs.chat_history.is_empty():
+			_add_message("", "Press T to chat")
+	else:
+		_add_message_no_save("", "Press T to chat")
 
 
 func _process(delta: float) -> void:
@@ -260,7 +263,7 @@ func _on_server_closed() -> void:
 			gs.disconnect_message = "Host left the server."
 		# Clear chat history on disconnect so a fresh session starts clean.
 		gs.clear_chat_history()
-	# Return to menu after a short delay.
+	# Return to multiplayer lobby screen after a short delay.
 	await get_tree().create_timer(2.0).timeout
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
+	get_tree().change_scene_to_file("res://multiplayer/ConnectScreen.tscn")

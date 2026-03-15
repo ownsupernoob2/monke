@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3 uid="uid://baiq7kp88w2lf"]
+[gd_scene load_steps=17 format=3 uid="uid://baiq7kp88w2lf"]
 
 [ext_resource type="Script" uid="uid://sblw7khl4man" path="res://maps/main.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://d0hf6nwjqlk76" path="res://components/Player.tscn" id="2"]
@@ -7,6 +7,8 @@
 [ext_resource type="PackedScene" path="res://components/Tree.tscn" id="5"]
 [ext_resource type="PackedScene" uid="uid://behqij2bghpnx" path="res://enemy/Swamp.tscn" id="6"]
 [ext_resource type="Script" path="res://maps/banana_spawner.gd" id="7"]
+[ext_resource type="Material" path="res://maps/materials/swamp_touch_ripple.tres" id="8"]
+[ext_resource type="Script" path="res://maps/swamp_water_ripple.gd" id="9"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -379,11 +381,15 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.934601, 0, -5.281687)
 
 [node name="WaterMesh" parent="Swamp" index="0"]
 transform = Transform3D(3.0577989, 0, 0, 0, 1, 0, 0, 0, 2.5183425, 0, 0.050000012, 0)
+surface_material_override/0 = ExtResource("8")
 
 [node name="WaterZone" parent="Swamp" index="1"]
 transform = Transform3D(3.0577989, 0, 0, 0, 1, 0, 0, 0, 2.5183425, 0, 1, 0)
 
 [editable path="Swamp"]
+
+[node name="WaterRippleController" type="Node" parent="."]
+script = ExtResource("9")
 
 ; ── Banana Spawner ──────────────────────────────────────────────────────────
 ; Centred on the vine field.  All spawn parameters controllable in Inspector.

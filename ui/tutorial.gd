@@ -22,8 +22,6 @@ enum Step {
 	COMBO_SWING,
 	INFO_CAMERA,
 	SHIFT_LOCK,
-	INFO_HUNGER,
-	EAT_BANANA,
 	OBSTACLE_COURSE,
 	COMPLETE,
 }
@@ -38,7 +36,6 @@ const AUTO_INFO_STEPS : Array[int] = [
 	Step.INFO_PUSH,
 	Step.INFO_VINE,
 	Step.INFO_CAMERA,
-	Step.INFO_HUNGER,
 ]
 
 const INFO_AUTO_ADVANCE_TIME := 5.0
@@ -79,11 +76,6 @@ const STEP_TEXT : Dictionary = {
 		+ "Press Q again to return to first-person.",
 	Step.SHIFT_LOCK:
 		"Try it! Press Q twice to toggle third-person and back.",
-	Step.INFO_HUNGER:
-		"Your monkey has a hunger bar that slowly drains.\n" \
-		+ "Bananas restore your hunger — find and eat one!",
-	Step.EAT_BANANA:
-		"Find and touch a banana to eat it.\nBananas restore your hunger.",
 	Step.OBSTACLE_COURSE:
 		"Complete the obstacle course!\nSwing across the platforms to reach the golden finish platform.",
 	Step.COMPLETE:
@@ -99,7 +91,6 @@ var _grabbed_vine    : bool  = false
 var _combo_reached   : bool  = false
 var _toggled_shift    : bool  = false
 var _prev_shift_lock  : bool  = false
-var _initial_hunger   : float = 100.0
 
 # ── Step timing ─────────────────────────────────────────────────────────────
 var _info_timer       : float = 0.0
@@ -131,9 +122,8 @@ func _spawn_player() -> void:
 	_player.global_position = SPAWN_POS
 
 	# Hunger starts at max, passive drain disabled.
-	# Hunger is hidden until the INFO_HUNGER step.
-	_player.hunger = _player.max_hunger
-	_player.set_hunger_passive_drain(false)
+	# Hunger is fully disabled in tutorial to keep onboarding beginner-friendly.
+	_player.set_hunger_enabled(false)
 	_hide_hunger_ui()
 
 	# Connect signals for tracking progress.
@@ -147,6 +137,7 @@ func _hide_hunger_ui() -> void:
 	_player.set_hunger_passive_drain(false)
 	_player.hud.hunger_bar.visible = false
 	_player.hud.hunger_label.visible = false
+	_player.hud.starvation_label.visible = false
 
 
 func _show_hunger_ui() -> void:
@@ -299,10 +290,6 @@ func _show_step() -> void:
 	_end_buttons.visible = (_current_step == Step.COMPLETE)
 	_skip_button.visible = (_current_step != Step.COMPLETE)
 
-	# When reaching INFO_HUNGER, enable hunger system.
-	if _current_step == Step.INFO_HUNGER:
-		_enable_hunger()
-
 	# Start auto-advance timer for non-welcome info steps.
 	if _current_step in AUTO_INFO_STEPS:
 		_info_timer = INFO_AUTO_ADVANCE_TIME
@@ -314,14 +301,6 @@ func _show_step() -> void:
 		_toggled_shift = false
 		if is_instance_valid(_player):
 			_prev_shift_lock = _player._shift_lock
-
-
-func _enable_hunger() -> void:
-	if not is_instance_valid(_player):
-		return
-	_player.hunger = 60.0
-	_initial_hunger = 60.0
-	_show_hunger_ui()  # also enables passive drain
 
 
 func _advance_step() -> void:
@@ -403,11 +382,6 @@ func _process(delta: float) -> void:
 		Step.COMBO_SWING:
 			pass  # handled by signal
 
-		Step.EAT_BANANA:
-			if _player.hunger > _initial_hunger:
-				_initial_hunger = _player.hunger
-				_advance_step()
-
 		Step.OBSTACLE_COURSE:
 			# Reached the golden finish platform.
 			var fp := get_node_or_null("FinishPlatform") as StaticBody3D
@@ -436,7 +410,6 @@ func _on_player_died() -> void:
 	# Player cannot die in the tutorial — reset position instead.
 	if is_instance_valid(_player):
 		_player.is_dead = false
-		_player.hunger = _player.max_hunger
 		_player.is_starving = false
 		if _player.hunger_death_timer and not _player.hunger_death_timer.is_queued_for_deletion():
 			_player.hunger_death_timer.stop()
@@ -446,9 +419,7 @@ func _on_player_died() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		if _player.hud:
 			_player.hud.death_label.visible = false
-		# Keep hunger UI state consistent with current step.
-		if _current_step < Step.INFO_HUNGER:
-			_hide_hunger_ui()
+		_hide_hunger_ui()
 
 
 func _on_skip() -> void:

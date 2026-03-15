@@ -39,7 +39,7 @@ var music_volume  : float = 0.8
 var sfx_volume    : float = 1.0
 var mouse_sensitivity : float = 0.5  # 0.0 – 1.0
 var fov : float = 75.0               # 50.0 – 120.0
-var fullscreen : bool = false
+var fullscreen : bool = true
 var vsync : bool = true
 
 

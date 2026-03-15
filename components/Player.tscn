@@ -55,6 +55,7 @@ shadow_mesh = SubResource("ArrayMesh_uq3y5")
 [node name="Player" type="CharacterBody3D" unique_id=284059570]
 script = ExtResource("1")
 swing_launch_speed = 12.5
+base_release_cap = 10.0
 combo_speed_bonus = 0.09
 poo_scene = ExtResource("5")
 poo_hunger_cost = 5.0
@@ -99,7 +100,7 @@ one_shot = true
 [node name="PauseMenu" parent="." unique_id=68810208 instance=ExtResource("6")]
 
 [node name="Torso" type="MeshInstance3D" parent="." unique_id=1220107760]
-transform = Transform3D(-0.62625086, 0, -5.5953222e-08, 0, 0.63296473, 0, 5.474859e-08, 0, -0.64003026, 0.0036158562, 0.26225632, -0.23959267)
+transform = Transform3D(-0.62625086, 0, -5.5953222e-08, 0, 0.63296473, 0, 5.474859e-08, 0, -0.64003026, -0.037405968, 0.26225632, -0.23959267)
 mesh = SubResource("ArrayMesh_t1obu")
 skeleton = NodePath("")
 

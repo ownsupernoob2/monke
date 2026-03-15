@@ -3,13 +3,15 @@ extends Node
 ## Tag gamemode manager.
 ## One player is "IT" — get close enough to transfer the tag.
 ## Non-IT players score 1 point per second of survival.
-## Hunger does NOT drain passively; only poo / pushes cost hunger.
+## Hunger is fully disabled in Tag mode.
 ## Bananas spawn at 40 % of the normal rate.
 ## Round ends after 2 minutes; highest survival score wins.
 
 const TAG_RANGE      : float = 3.0   ## metres — proximity needed to tag
 const ROUND_DURATION : float = 120.0
 const TAG_COOLDOWN   : float = 2.0   ## seconds before new IT can transfer again
+const ESP_COLOR_IT_VIEW : Color = Color(0.20, 0.62, 1.0)
+const ESP_COLOR_RUNNER_VIEW : Color = Color(1.0, 0.20, 0.20)
 
 var total_rounds  : int = 3
 var current_round : int = 0
@@ -55,9 +57,13 @@ func _ready() -> void:
 
 	await get_tree().process_frame
 	_cache_local_player()
-	# Disable passive hunger drain — abilities still cost hunger.
+	# Disable hunger fully in Tag mode.
 	if _local_player:
-		_local_player.set_hunger_passive_drain(false)
+		_local_player.set_hunger_enabled(false)
+		if _local_player.hud:
+			_local_player.hud.hunger_bar.visible = false
+			_local_player.hud.hunger_label.visible = false
+			_local_player.hud.starvation_label.visible = false
 	_reduce_banana_count()
 	_spawn_hud()
 	_start_round()
@@ -65,6 +71,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_update_it_label()
+	_update_tag_esp()
 
 	# Spectator camera follow.
 	if _spectating and _spectate_camera and _spectate_targets.size() > 0:
@@ -155,6 +162,7 @@ func _start_round() -> void:
 		_rpc_set_it(first_it)
 
 	_stop_spectating()
+	_update_hud_timer()
 	_show_announcement("Round %d — TAG!" % current_round)
 	await get_tree().create_timer(2.5).timeout
 	if is_inside_tree():
@@ -213,12 +221,18 @@ func _rpc_sync_scores(scores: Dictionary) -> void:
 # ══════════════════════════════════════════════════════════════════════════════
 
 func _on_player_died(peer_id: int) -> void:
+	if not _round_active:
+		return
 	_alive_peers.erase(peer_id)
 	# If IT died, volunteer the first alive player.
 	if peer_id == _it_peer and _alive_peers.size() > 0 and GameLobby.is_host():
 		var new_it : int = _alive_peers[0]
 		rpc("_rpc_set_it", new_it)
 		_rpc_set_it(new_it)
+	if GameLobby.is_host() and _alive_peers.size() <= 1:
+		_round_active = false
+		_end_round_by_elimination()
+		return
 	if _local_player and peer_id == _local_player.get_multiplayer_authority():
 		_start_spectating()
 	elif _spectating:
@@ -226,6 +240,8 @@ func _on_player_died(peer_id: int) -> void:
 
 
 func _on_peer_left(peer_id: int) -> void:
+	if not _round_active:
+		return
 	_alive_peers.erase(peer_id)
 	_all_peer_ids.erase(peer_id)
 	_scores.erase(peer_id)
@@ -234,11 +250,19 @@ func _on_peer_left(peer_id: int) -> void:
 		var new_it : int = _alive_peers[0]
 		rpc("_rpc_set_it", new_it)
 		_rpc_set_it(new_it)
+	if GameLobby.is_host() and _alive_peers.size() <= 1:
+		_round_active = false
+		_end_round_by_elimination()
+		return
 	_refresh_spectate_targets()
 
 
 func _on_server_closed() -> void:
 	_round_active = false
+
+
+func is_it_peer(peer_id: int) -> bool:
+	return _it_peer == peer_id
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -249,6 +273,23 @@ func _end_round_by_timer() -> void:
 	var ranked : Array[int] = _all_peer_ids.duplicate()
 	ranked.sort_custom(func(a: int, b: int) -> bool:
 		return _scores.get(a, 0) > _scores.get(b, 0))
+	_award_round_points(ranked)
+	rpc("_rpc_round_over_tag", _total_scores)
+	_rpc_round_over_tag(_total_scores)
+
+
+func _end_round_by_elimination() -> void:
+	var ranked : Array[int] = []
+	if _alive_peers.size() == 1:
+		ranked.append(_alive_peers[0])
+	var others : Array[int] = []
+	for pid : int in _all_peer_ids:
+		if pid not in ranked:
+			others.append(pid)
+	others.sort_custom(func(a: int, b: int) -> bool:
+		return _scores.get(a, 0) > _scores.get(b, 0))
+	for pid : int in others:
+		ranked.append(pid)
 	_award_round_points(ranked)
 	rpc("_rpc_round_over_tag", _total_scores)
 	_rpc_round_over_tag(_total_scores)
@@ -267,6 +308,11 @@ func _award_round_points(ranked: Array[int]) -> void:
 func _rpc_round_over_tag(final_scores: Dictionary) -> void:
 	_round_active = false
 	_total_scores = final_scores
+	var players_container : Node = get_parent().get_node_or_null("Players")
+	if players_container:
+		for child : Node in players_container.get_children():
+			if child is Player:
+				(child as Player).set_role_outline(false)
 
 	_stop_spectating()
 	_freeze_local_player()
@@ -298,7 +344,7 @@ func _go_to_selection() -> void:
 
 func _freeze_local_player() -> void:
 	if _local_player and is_instance_valid(_local_player) and not _local_player.is_dead:
-		_local_player.set_hunger_passive_drain(true)
+		_local_player.set_hunger_enabled(false)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -345,6 +391,7 @@ func _reduce_recursive(node: Node) -> void:
 	for child : Node in node.get_children():
 		if child is BananaSpawner:
 			child.max_bananas = maxi(ceili(child.max_bananas * 0.4), 3)
+			child.buff_spawn_chance = 1.0
 			var container : Node = child.get_node_or_null("Bananas")
 			if container:
 				var existing : Array = container.get_children()
@@ -414,7 +461,10 @@ func _update_hud_timer() -> void:
 		return
 	var lbl : Label = _hud_instance.get_node_or_null("PanelContainer/VBox/TimerLabel")
 	if lbl:
-		lbl.text = "⏱ %d s" % maxi(ceili(_round_timer), 0)
+		var total_secs : int = maxi(ceili(_round_timer), 0)
+		var mins : int = floori(float(total_secs) / 60.0)
+		var secs : int = total_secs % 60
+		lbl.text = "⏱ %02d:%02d" % [mins, secs]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -517,3 +567,28 @@ func _cache_local_player() -> void:
 		if child is Player and child.is_local:
 			_local_player = child as Player
 			return
+
+
+func _update_tag_esp() -> void:
+	var players_container : Node = get_parent().get_node_or_null("Players")
+	if players_container == null:
+		return
+	var local_id : int = multiplayer.get_unique_id()
+	var local_is_it : bool = (_it_peer == local_id)
+	for child : Node in players_container.get_children():
+		if not (child is Player):
+			continue
+		var p := child as Player
+		var pid : int = p.get_multiplayer_authority()
+		if pid == local_id or p.is_dead or pid not in _alive_peers:
+			p.set_role_outline(false)
+			continue
+		if local_is_it:
+			# IT sees all runners in blue through geometry.
+			p.set_role_outline(true, ESP_COLOR_IT_VIEW)
+		else:
+			# Runners only see IT in red through geometry.
+			if pid == _it_peer:
+				p.set_role_outline(true, ESP_COLOR_RUNNER_VIEW)
+			else:
+				p.set_role_outline(false)

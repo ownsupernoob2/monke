@@ -45,6 +45,8 @@ func _ready() -> void:
 	# Rotate the cylinder so its height-axis (local Y) aligns with Pivot's -Z.
 	# After this rotation: cylinder starts at z=0 (shoulder) and extends toward -Z.
 	arm_mesh.rotation_degrees.x = -90.0
+	# Imported arm texture/mesh faces the opposite direction by default.
+	arm_mesh.rotation_degrees.y = 180.0
 	_set_arm_length(rest_length)
 
 

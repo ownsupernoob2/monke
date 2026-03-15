@@ -17,6 +17,8 @@ signal eos_ready
 
 ## True after login_async() succeeds.
 var is_ready : bool = false
+## True once bootstrap has finished attempting EOS init/login (success or fail).
+var init_complete : bool = false
 
 ## The local product user id string (set after login).
 var product_user_id : String = ""
@@ -31,6 +33,7 @@ func _init_eos() -> void:
 	if not _eos_available():
 		push_warning("EOSBootstrap: EOS plugin not found – multiplayer will fall back to ENet.")
 		is_ready = false
+		init_complete = true
 		eos_ready.emit()
 		return
 
@@ -47,6 +50,7 @@ func _init_eos() -> void:
 		cfg_err = cfg.load("res://eos_credentials.cfg")
 	if cfg_err != OK:
 		push_error("EOSBootstrap: eos_credentials.cfg not found (err %d). Place it next to the .exe or ensure it is included in the export PCK." % cfg_err)
+		init_complete = true
 		eos_ready.emit()
 		return
 
@@ -65,12 +69,14 @@ func _init_eos() -> void:
 			creds.sandbox_id, creds.deployment_id, creds.client_id, creds.client_secret]
 	if required_fields.any(func(f): return f == ""):
 		push_warning("EOSBootstrap: One or more EOS credentials are empty – falling back to ENet.")
+		init_complete = true
 		eos_ready.emit()
 		return
 
 	var ok : bool = await HPlatform.setup_eos_async(creds)
 	if not ok:
 		push_error("EOSBootstrap: HPlatform.setup_eos_async failed.")
+		init_complete = true
 		eos_ready.emit()
 		return
 
@@ -79,18 +85,20 @@ func _init_eos() -> void:
 	ok = await HAuth.login_anonymous_async(display_name)
 	if not ok:
 		push_error("EOSBootstrap: HAuth.login_anonymous_async failed.")
+		init_complete = true
 		eos_ready.emit()
 		return
 
 	product_user_id = HAuth.product_user_id
 	is_ready = true
+	init_complete = true
 	eos_ready.emit()
 
 
 ## Call this if you need to wait until EOS is ready from another script.
 ## Returns immediately if already ready, otherwise awaits the signal.
 func wait_until_ready() -> void:
-	if not is_ready:
+	if not init_complete:
 		await eos_ready
 
 

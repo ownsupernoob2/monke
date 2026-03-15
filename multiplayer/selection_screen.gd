@@ -11,6 +11,7 @@ const ALL_GAMEMODES : Array[String] = [
 	"Last Person Standing",
 	"Banana Frenzy",
 	"Tag",
+	"Bomb Tag",
 ]
 
 const ALL_MAPS : Dictionary = {
@@ -21,8 +22,7 @@ const ALL_MAPS : Dictionary = {
 }
 
 const ALL_BUFFS : Array[String] = [
-	"Golden Banana", "Iron Stomach",
-	"Monkey Speed", "Vine Master", "Poo Power",
+	"Repulsor", "Attraction", "Monkey Speed", "Wind Rider",
 ]
 
 const PLAYER_SCENE : String = "res://components/Player.tscn"
@@ -175,11 +175,11 @@ const _THUMBNAILS : Dictionary = {
 	"Last Person Standing": "res://assets/thumbnails/lps.png",
 	"Banana Frenzy":        "res://assets/thumbnails/banana_frenzy.png",
 	"Tag":                  "res://assets/thumbnails/tag.png",
-	"Golden Banana":        "res://assets/thumbnails/golden_banana.png",
-	"Iron Stomach":         "res://assets/thumbnails/iron_stomach.png",
+	"Bomb Tag":             "res://assets/thumbnails/bomb_tag.png",
+	"Repulsor":             "res://assets/thumbnails/poo_power.png",
+	"Attraction":           "res://assets/thumbnails/attraction.png",
 	"Monkey Speed":         "res://assets/thumbnails/monkey_speed.png",
-	"Vine Master":          "res://assets/thumbnails/vine_master.png",
-	"Poo Power":            "res://assets/thumbnails/poo_power.png",
+	"Wind Rider":           "res://assets/thumbnails/vine_master.png",
 }
 
 ## Short flavour text shown on each card below the title.
@@ -187,11 +187,11 @@ const _DESCRIPTIONS : Dictionary = {
 	"Last Person Standing":  "Be the last monkey alive.\nCollect bananas to survive starvation.\nEliminate others.",
 	"Banana Frenzy":         "Grab as many bananas as you can\nin 2 minutes!\nNo starvation — only points matter.",
 	"Tag":                   "One monkey is IT.\nTouch IT to pass the tag!\nScore points every second you're free.",
-	"Golden Banana":         "Eating bananas gives extra health.",
-	"Iron Stomach":          "Hunger drains much slower.",
-	"Monkey Speed":          "Everyone moves significantly faster.",
-	"Vine Master":           "Extended vine grab range.",
-	"Poo Power":             "Poo projectiles are larger & faster.",
+	"Bomb Tag":              "The bomb explodes in 30 seconds.\nTag someone before time runs out\nor get eliminated.",
+	"Repulsor":              "Repulsion aura: shove IT players harder\nand deflect incoming poo.",
+	"Attraction":            "Magnet aura: pull nearby bananas\nwithin 5m for 10 seconds.",
+	"Monkey Speed":          "Movement boost: faster pushes\nand stronger release speed.",
+	"Wind Rider":            "Gain a mid-air dash ability\n(press Space while airborne).",
 }
 
 # Category theme colours used in the image area of each card type.
@@ -583,6 +583,9 @@ func _launch_game() -> void:
 		gs.selected_gamemode = chosen_gamemode
 		gs.selected_buff = chosen_buff
 
+	if GameLobby.is_host():
+		GameLobby.begin_match(chosen_map_path, chosen_gamemode, chosen_buff)
+
 	get_tree().change_scene_to_file(chosen_map_path)
 
 
@@ -625,16 +628,9 @@ func _setup_leaderboard_station() -> void:
 	panel_inst.position = Vector3(0.0, 3.2, 0.05)
 	_leaderboard_station.add_child(panel_inst)
 
-	# ─ Header label ─
-	var hdr := Label3D.new()
-	hdr.name = "BoardTitle"
-	hdr.text = "LEADERBOARD"
-	hdr.font_size = 80
-	hdr.outline_size = 8
-	hdr.modulate = Color(1.0, 0.9, 0.3)
-	hdr.position = Vector3(0.0, 5.85, 0.0)
-	hdr.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_leaderboard_station.add_child(hdr)
+	# ─ Header card ─
+	_create_text_card(_leaderboard_station, "LEADERBOARD", Vector2(780, 180),
+			Vector2(4.6, 1.05), Vector3(0.0, 5.85, 0.08), Color(1.0, 0.9, 0.3), 84)
 
 	# ─ Podium blocks: centre/tallest = 1st, left = 2nd, right = 3rd ─
 	# Each entry: [local_x, height, colour].
@@ -719,25 +715,56 @@ func _populate_leaderboard() -> void:
 			tilt_tw.tween_property(puppet, "rotation:x", -0.35, 1.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 			tilt_tw.tween_property(puppet, "rotation:x", 0.0, 1.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
-		# Rank badge (1ST / 2ND / 3RD).
-		var rank_lbl := Label3D.new()
-		rank_lbl.text = ranks[i]
-		rank_lbl.font_size = 52
-		rank_lbl.outline_size = 6
-		rank_lbl.modulate = Color(1.0, 0.9, 0.3) if i == 0 else Color.WHITE
-		rank_lbl.position = Vector3(0.0, -0.35, 0.0)
-		rank_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		root.add_child(rank_lbl)
+		# Rank + info as separate viewport cards (2D text rendered onto quads).
+		var rank_col := Color(1.0, 0.9, 0.3) if i == 0 else Color(0.95, 0.95, 1.0)
+		_create_text_card(root, ranks[i], Vector2(260, 110), Vector2(1.25, 0.52),
+				Vector3(0.0, -0.48, 0.04), rank_col, 56)
+		_create_text_card(root, "%s\n%d pts" % [pname, pts], Vector2(420, 180),
+				Vector2(1.95, 0.82), Vector3(0.0, 2.55, 0.04), Color(0.95, 0.95, 1.0), 46)
 
-		# Name + score label.
-		var info_lbl := Label3D.new()
-		info_lbl.text = "%s\n%d pts" % [pname, pts]
-		info_lbl.font_size = 46
-		info_lbl.outline_size = 5
-		info_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		info_lbl.position = Vector3(0.0, 2.3, 0.0)
-		info_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		root.add_child(info_lbl)
+
+func _create_text_card(parent: Node3D, text: String, vp_size: Vector2,
+		world_size: Vector2, offset: Vector3, text_color: Color, font_size: int) -> void:
+	var holder := Node3D.new()
+	holder.position = offset
+	parent.add_child(holder)
+
+	var vp := SubViewport.new()
+	vp.size = Vector2i(int(vp_size.x), int(vp_size.y))
+	vp.transparent_bg = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	holder.add_child(vp)
+
+	var bg := ColorRect.new()
+	bg.color = Color(0.03, 0.05, 0.09, 0.80)
+	bg.size = vp_size
+	vp.add_child(bg)
+
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.size = vp_size
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.add_theme_font_size_override("font_size", font_size)
+	lbl.add_theme_color_override("font_color", text_color)
+	lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.9))
+	lbl.add_theme_constant_override("outline_size", 6)
+	vp.add_child(lbl)
+
+	var quad := MeshInstance3D.new()
+	var qm := QuadMesh.new()
+	qm.size = world_size
+	qm.flip_faces = true
+	quad.mesh = qm
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = vp.get_texture()
+	mat.uv1_scale = Vector3(-1, 1, 1)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	quad.material_override = mat
+	holder.add_child(quad)
 
 
 ## Tween the camera pivot to face the leaderboard station.
@@ -774,6 +801,8 @@ func _rpc_end_to_lobby() -> void:
 
 
 func _end_to_lobby() -> void:
+	if GameLobby.is_host():
+		GameLobby.end_match()
 	if has_node("/root/GameSettings"):
 		get_node("/root/GameSettings").lps_clear()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

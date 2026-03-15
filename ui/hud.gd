@@ -18,6 +18,10 @@ extends CanvasLayer
 @onready var spectate_bar     : HBoxContainer = $Control/SpectateBar
 @onready var spectate_label   : Label         = $Control/SpectateBar/SpectateLabel
 
+# ── Buff hint (bottom-centre, created dynamically) ───────────────────────────
+var buff_hint_label : Label = null
+var effects_list : VBoxContainer = null
+
 
 func _ready() -> void:
 	starvation_label.visible = false
@@ -27,6 +31,31 @@ func _ready() -> void:
 	alive_label.text         = ""
 	timer_label.text         = ""
 	spectate_bar.visible     = false
+	# Create buff hint label anchored to bottom-centre.
+	buff_hint_label = Label.new()
+	buff_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	buff_hint_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	buff_hint_label.offset_left  = -260.0
+	buff_hint_label.offset_right =  260.0
+	buff_hint_label.offset_top   = -70.0
+	buff_hint_label.offset_bottom = -44.0
+	buff_hint_label.add_theme_font_size_override("font_size", 18)
+	buff_hint_label.add_theme_color_override("font_color", Color(0.95, 0.88, 0.35))
+	buff_hint_label.add_theme_constant_override("outline_size", 2)
+	buff_hint_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	buff_hint_label.text = ""
+	$Control.add_child(buff_hint_label)
+
+	# Effect cards shown on the left, like potion effects.
+	effects_list = VBoxContainer.new()
+	effects_list.name = "EffectsList"
+	effects_list.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	effects_list.offset_left = 14.0
+	effects_list.offset_top = 186.0
+	effects_list.offset_right = 280.0
+	effects_list.offset_bottom = 540.0
+	effects_list.add_theme_constant_override("separation", 6)
+	$Control.add_child(effects_list)
 
 
 ## Called every frame by the player's `hunger_changed` signal.
@@ -107,6 +136,46 @@ func set_speed(speed: float) -> void:
 
 # ── Game-state updates (called by LPS manager) ──────────────────────────────
 
+## Updates the buff ability hint displayed at the bottom of the screen.
+## Pass an empty string to clear the hint.
+func set_buff_hint(buff_name: String) -> void:
+	if buff_hint_label == null:
+		return
+	match buff_name:
+		"Wind Rider":   buff_hint_label.text = "Wind Rider | [SPACE] Air Dash"
+		"Monkey Speed": buff_hint_label.text = "Monkey Speed | Speed Boost"
+		"Repulsor":     buff_hint_label.text = "Repulsor | Pushes IT Away"
+		"Attraction":   buff_hint_label.text = "Attraction | Pulls Bananas"
+		_:              buff_hint_label.text = ""
+
+
+func set_effects(effects: Array[Dictionary]) -> void:
+	if effects_list == null:
+		return
+	for child : Node in effects_list.get_children():
+		child.queue_free()
+	for effect in effects:
+		var card := PanelContainer.new()
+		card.custom_minimum_size = Vector2(240.0, 38.0)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.06, 0.08, 0.12, 0.82)
+		sb.border_color = Color(0.45, 0.55, 0.72, 0.9)
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(5)
+		sb.set_content_margin_all(6)
+		card.add_theme_stylebox_override("panel", sb)
+		var lbl := Label.new()
+		var name := str(effect.get("name", "Effect"))
+		var stacks := int(effect.get("stacks", 1))
+		var time_left := float(effect.get("time_left", 0.0))
+		lbl.text = "%s x%d  %ds" % [name, stacks, maxi(int(ceili(time_left)), 0)]
+		lbl.add_theme_font_size_override("font_size", 15)
+		lbl.add_theme_color_override("font_color", Color(0.92, 0.95, 1.0))
+		card.add_child(lbl)
+		effects_list.add_child(card)
+
+
+# ── Game-state updates (called by LPS manager) ──────────────────────────────
 func update_round_info(current: int, total: int) -> void:
 	round_label.text = "Round %d / %d" % [current, total]
 

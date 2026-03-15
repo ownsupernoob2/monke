@@ -10,6 +10,8 @@ var _players_node : Node3D = null
 
 ## Track spawned peer IDs to avoid double-spawn.
 var _spawned_peers : Dictionary = {}
+var _peer_spawn_slot : Dictionary = {}
+var _used_spawn_slots : Dictionary = {}
 
 ## Chat overlay instance (multiplayer only).
 var _chat : Node = null
@@ -58,6 +60,7 @@ func _spawn_local_player() -> void:
 	player.global_position = spawn_point.global_position
 	player.player_died.connect(_on_player_died.bind(0))
 	_apply_hunger(player)
+	_apply_buff(player)
 
 
 # ── Multiplayer ───────────────────────────────────────────────────────────────
@@ -103,12 +106,15 @@ func _spawn_mp_player(peer_id : int) -> void:
 	_spawned_peers[peer_id] = true
 
 	# Place each player on a different platform (if available).
-	var idx : int = _spawned_peers.size() - 1
 	var platforms := _get_platform_positions()
-	if platforms.size() > 0:
-		player.global_position = platforms[idx % platforms.size()] + Vector3(0, 2, 0)
+	var slot : int = _assign_spawn_slot(peer_id, platforms.size())
+	if platforms.size() > 0 and slot >= 0:
+		player.global_position = platforms[slot] + Vector3(0, 2, 0)
 	else:
-		var offset := Vector3(idx * 3.0, 0.0, 0.0)
+		# Fallback ring placement keeps players separated even without platforms.
+		var radius := 3.0 + float(slot) * 0.45
+		var angle := float(slot) * 0.9
+		var offset := Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
 		player.global_position = spawn_point.global_position + offset
 
 	# Wire death signal.
@@ -116,6 +122,7 @@ func _spawn_mp_player(peer_id : int) -> void:
 
 	if is_mine:
 		_apply_hunger(player)
+	_apply_buff(player)
 
 
 func _apply_hunger(player : Player) -> void:
@@ -125,11 +132,40 @@ func _apply_hunger(player : Player) -> void:
 			player.set_hunger_enabled(false)
 
 
+func _apply_buff(player : Player) -> void:
+	# Buffs are now pickup-based (special bananas), not granted at spawn.
+	if player == null:
+		return
+
+
 func _on_peer_left(peer_id : int) -> void:
 	var node : Node = _players_node.get_node_or_null("Player_%d" % peer_id)
 	if node:
 		node.queue_free()
 	_spawned_peers.erase(peer_id)
+	if _peer_spawn_slot.has(peer_id):
+		var slot : int = int(_peer_spawn_slot[peer_id])
+		_peer_spawn_slot.erase(peer_id)
+		_used_spawn_slots.erase(slot)
+
+
+func _assign_spawn_slot(peer_id: int, slot_count: int) -> int:
+	if _peer_spawn_slot.has(peer_id):
+		return int(_peer_spawn_slot[peer_id])
+	if slot_count > 0:
+		for i in slot_count:
+			if not _used_spawn_slots.has(i):
+				_peer_spawn_slot[peer_id] = i
+				_used_spawn_slots[i] = true
+				return i
+		# More players than slots: recycle in a stable way.
+		var recycled : int = peer_id % slot_count
+		_peer_spawn_slot[peer_id] = recycled
+		return recycled
+	# No platforms case: still assign a unique synthetic slot index.
+	var fallback_slot : int = _peer_spawn_slot.size()
+	_peer_spawn_slot[peer_id] = fallback_slot
+	return fallback_slot
 
 
 ## Collect world positions of all platforms in the map's Platforms node.
@@ -148,7 +184,7 @@ func _on_server_closed() -> void:
 	# If there's no chat (shouldn't happen), do it here as fallback.
 	if not _chat:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
+		get_tree().change_scene_to_file("res://multiplayer/ConnectScreen.tscn")
 
 
 func _on_player_died(peer_id : int) -> void:
@@ -172,6 +208,12 @@ func _spawn_gamemode_manager() -> void:
 		tag.name = "TagManager"
 		tag.set_script(tag_script)
 		add_child(tag)
+	elif gm == "Bomb Tag":
+		var bomb_script : Script = load("res://maps/bomb_tag_manager.gd")
+		var bomb := Node.new()
+		bomb.name = "BombTagManager"
+		bomb.set_script(bomb_script)
+		add_child(bomb)
 	else:
 		var lps_script : Script = load("res://maps/lps_manager.gd")
 		var lps := Node.new()

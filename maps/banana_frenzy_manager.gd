@@ -3,7 +3,7 @@ extends Node
 ## Banana Frenzy gamemode manager.
 ## Timer-based round: collecting bananas gives points (not hunger).
 ## Player with the most points when the timer expires wins the round.
-## Hunger still drains — tension between starving and point-scoring.
+## Hunger is disabled for this mode.
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 const POINTS_PER_BANANA : int   = 10
@@ -141,6 +141,7 @@ func _start_round() -> void:
 	_connect_bananas()
 	_update_leader_and_crown()
 	_update_hud_scores()
+	_update_hud_timer()
 	_round_active = true
 
 
@@ -371,7 +372,10 @@ func _update_hud_timer() -> void:
 		return
 	var lbl : Label = _hud_instance.get_node_or_null("Panel/VBox/TimerLabel")
 	if lbl:
-		lbl.text = "%d s" % maxi(ceili(_round_timer), 0)
+		var total_secs : int = maxi(ceili(_round_timer), 0)
+		var mins : int = floori(float(total_secs) / 60.0)
+		var secs : int = total_secs % 60
+		lbl.text = "⏱ %02d:%02d" % [mins, secs]
 
 
 # ══════════════════════════════════════════════════════════════════════════════

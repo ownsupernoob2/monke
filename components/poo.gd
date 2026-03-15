@@ -41,6 +41,26 @@ func _on_body_entered(body: Node3D) -> void:
 	if body == _thrower:
 		return
 	if body is Player:
+		var target_player : Player = body as Player
+		if target_player.has_method("has_buff") and target_player.has_buff("Repulsor"):
+			_deflect_from(target_player)
+			return
 		# Drain the victim's hunger (blind/slow mechanic later).
-		body.add_hunger(-hunger_damage)
+		target_player.add_hunger(-hunger_damage)
 	queue_free()
+
+
+func _deflect_from(player: Player) -> void:
+	var away := global_position - player.global_position
+	away.y = maxf(away.y, 0.05)
+	if away.length_squared() < 0.001:
+		away = -player.global_transform.basis.z
+	away = away.normalized()
+	linear_velocity = away * maxf(linear_velocity.length(), 18.0)
+	_thrower = player
+	add_collision_exception_with(player)
+	$HitZone.monitoring = false
+	get_tree().create_timer(0.1).timeout.connect(func() -> void:
+		if is_inside_tree():
+			$HitZone.monitoring = true
+	)

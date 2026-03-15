@@ -17,75 +17,80 @@ height = 0.12
 albedo_color = Color(0.08, 0.18, 0.06, 1)
 
 [sub_resource type="QuadMesh" id="quad_main"]
-size = Vector2(3.2, 4.2)
 flip_faces = true
+size = Vector2(3.2, 4.2)
+
+[sub_resource type="ViewportTexture" id="ViewportTexture_b00nv"]
+viewport_path = NodePath("MainCard/VP")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rn8js"]
+resource_local_to_scene = true
+albedo_texture = SubResource("ViewportTexture_b00nv")
 
 [sub_resource type="QuadMesh" id="quad_settings"]
-size = Vector2(3.4, 4.6)
 flip_faces = true
+size = Vector2(3.4, 4.6)
 
-[node name="MainMenu" type="Node3D"]
+[node name="MainMenu" type="Node3D" unique_id=754272529]
 script = ExtResource("1")
 
-[node name="CameraPivot" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.993, 0.120, 0, -0.120, 0.993, 0, 2.5, 0)
+[node name="CameraPivot" type="Node3D" parent="." unique_id=1283275030]
+transform = Transform3D(1, 0, 0, 0, 0.993, 0.12, 0, -0.12, 0.993, 0, 2.5, 0)
 
-[node name="Camera3D" type="Camera3D" parent="CameraPivot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 5)
+[node name="Camera3D" type="Camera3D" parent="CameraPivot" unique_id=1257286626]
+transform = Transform3D(1, 0, 0, 0, 0.99977565, 1.0430813e-07, 0, -1.0430813e-07, 0.99977565, -1.0558047, 0.17164111, 1.3495692)
 fov = 55.0
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=853122711]
 environment = SubResource("env")
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1577563657]
 transform = Transform3D(1, 0, 0, 0, 0.766, -0.643, 0, 0.643, 0.766, 0, 3, 0)
 light_energy = 1.2
 shadow_enabled = true
 
-[node name="OmniLight3D" type="OmniLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 3, -3)
+[node name="OmniLight3D" type="OmniLight3D" parent="." unique_id=386372079]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6480665, 3.0742502, 0.6206449)
 omni_range = 10.0
 
-[node name="MonkeyPivot" type="Node3D" parent="."]
+[node name="MonkeyPivot" type="Node3D" parent="." unique_id=1204397523]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, -5)
 
-[node name="Platform" type="MeshInstance3D" parent="MonkeyPivot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, 0)
+[node name="Platform" type="MeshInstance3D" parent="MonkeyPivot" unique_id=59471519]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.0733328, 0.22098786, -0.7062297)
 mesh = SubResource("CylinderMesh_plat")
 surface_material_override/0 = SubResource("mat_plat")
 
-[node name="MainCard" type="Node3D" parent="."]
+[node name="MainCard" type="Node3D" parent="." unique_id=55415878]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.5, 0, -5)
 
-[node name="VP" type="SubViewport" parent="MainCard"]
+[node name="VP" type="SubViewport" parent="MainCard" unique_id=1749513027]
 size = Vector2i(420, 560)
-transparent_bg = false
 render_target_update_mode = 3
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="MainCard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
+[node name="MeshInstance3D" type="MeshInstance3D" parent="MainCard" unique_id=1814800893]
+transform = Transform3D(0.80466586, 0, -0.5937279, 0, 1, 0, 0.5937279, 0, 0.80466586, 0, 2.1, 0)
 mesh = SubResource("quad_main")
+surface_material_override/0 = SubResource("StandardMaterial3D_rn8js")
 
-[node name="SettingsCard" type="Node3D" parent="."]
+[node name="SettingsCard" type="Node3D" parent="." unique_id=1037747025]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -5, 0, 0)
 
-[node name="VP" type="SubViewport" parent="SettingsCard"]
+[node name="VP" type="SubViewport" parent="SettingsCard" unique_id=1408225496]
 size = Vector2i(440, 600)
-transparent_bg = false
 render_target_update_mode = 3
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="SettingsCard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.3, 0)
+[node name="MeshInstance3D" type="MeshInstance3D" parent="SettingsCard" unique_id=1323457102]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 0, 2.3, 0)
 mesh = SubResource("quad_settings")
 
-[node name="CustomizeCard" type="Node3D" parent="."]
+[node name="CustomizeCard" type="Node3D" parent="." unique_id=1292237247]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 5)
 
-[node name="VP" type="SubViewport" parent="CustomizeCard"]
+[node name="VP" type="SubViewport" parent="CustomizeCard" unique_id=2021751361]
 size = Vector2i(420, 560)
-transparent_bg = false
 render_target_update_mode = 3
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="CustomizeCard"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CustomizeCard" unique_id=1245628658]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
 mesh = SubResource("quad_main")

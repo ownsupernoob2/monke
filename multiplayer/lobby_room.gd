@@ -9,6 +9,7 @@ extends Node3D
 @onready var ip_label         : Label   = $UILayer/TopBar/IPLabel
 @onready var show_ip_btn      : Button  = $UILayer/TopBar/ShowIPBtn
 @onready var copy_code_btn    : Button  = $UILayer/TopBar/CopyCodeBtn
+@onready var public_toggle    : CheckBox = $UILayer/TopBar/PublicToggle
 @onready var rounds_spin      : SpinBox = $UILayer/BottomBar/RoundsSpinBox
 @onready var rounds_label     : Label   = $UILayer/BottomBar/RoundsLabel
 
@@ -20,9 +21,13 @@ var _ip_visible : bool   = false
 
 const PLAYER_SCENE : String = "res://components/Player.tscn"
 
+var _loading_layer : CanvasLayer = null
+var _loading_label : Label = null
+
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_style_lobby_buttons()
 
 	start_btn.visible = lobby.is_host()
 	start_btn.pressed.connect(_on_start)
@@ -39,6 +44,10 @@ func _ready() -> void:
 	ip_label.text = "Code: fetching…"
 	show_ip_btn.pressed.connect(_on_toggle_ip)
 	copy_code_btn.pressed.connect(_on_copy_code)
+	public_toggle.visible = lobby.is_host() and lobby.eos_available()
+	public_toggle.button_pressed = lobby.is_current_lobby_public()
+	if public_toggle.visible:
+		public_toggle.toggled.connect(_on_public_toggled)
 
 	if lobby.eos_available():
 		# EOS mode – show/mask the room code.
@@ -46,6 +55,7 @@ func _ready() -> void:
 	else:
 		# ENet mode – fetch public IP as before.
 		ip_label.text = "IP: fetching…"
+		copy_code_btn.visible = true
 		_fetch_public_ip()
 
 	lobby.player_joined.connect(_on_player_joined)
@@ -53,6 +63,14 @@ func _ready() -> void:
 	lobby.player_renamed.connect(_on_player_renamed)
 	lobby.game_starting.connect(_on_game_starting)
 	lobby.server_closed.connect(_on_server_closed)
+	lobby.match_state_changed.connect(_on_match_state_changed)
+	lobby.ensure_local_registered()
+
+	# Late-join safety: if this client landed here while a match is live,
+	# route directly into the running map.
+	if lobby.match_in_progress and lobby.active_map_path != "":
+		_on_match_state_changed(true, lobby.active_map_path)
+		return
 
 	# Add chat overlay.
 	var chat_scene := load("res://ui/Chat.tscn")
@@ -154,16 +172,36 @@ func _on_start() -> void:
 
 
 func _on_back() -> void:
-	lobby.disconnect_lobby()
+	_show_loading("Closing lobby")
+	_set_ui_enabled(false)
+	await lobby.disconnect_lobby_async()
+	_hide_loading()
 	if has_node("/root/GameSettings"):
 		get_node("/root/GameSettings").clear_chat_history()
 	get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
+
+
+func _notification(what: int) -> void:
+	# Host leaving the room via window close should disband the lobby.
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and lobby and lobby.is_host():
+		lobby.disconnect_lobby_async()
 
 
 func _on_rounds_changed(value: float) -> void:
 	if has_node("/root/GameSettings"):
 		var gs : Node = get_node("/root/GameSettings")
 		gs.round_count = int(value)
+
+
+func _on_match_state_changed(in_progress: bool, map_path: String) -> void:
+	if not in_progress or map_path == "":
+		return
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		gs.selected_map = lobby.active_map_path
+		gs.selected_gamemode = lobby.active_gamemode
+		gs.selected_buff = lobby.active_buff
+	get_tree().change_scene_to_file(map_path)
 
 
 func _get_local_ip() -> String:
@@ -204,7 +242,12 @@ func _on_toggle_ip() -> void:
 
 
 func _on_copy_code() -> void:
-	var code : String = lobby.current_lobby_id
+	var code : String = lobby.current_short_code
+	if code.is_empty():
+		if lobby.eos_available():
+			code = lobby.current_lobby_id
+		else:
+			code = _enet_share_code()
 	if code.is_empty():
 		return
 	DisplayServer.clipboard_set(code)
@@ -217,7 +260,9 @@ func _on_copy_code() -> void:
 func _refresh_ip_label() -> void:
 	# EOS mode – display the room code.
 	if lobby.eos_available():
-		var code : String = lobby.current_lobby_id
+		var code : String = lobby.current_short_code
+		if code == "":
+			code = lobby.current_lobby_id
 		if code == "":
 			ip_label.text = "Code: (not hosting)"
 			show_ip_btn.text = "Show"
@@ -237,11 +282,84 @@ func _refresh_ip_label() -> void:
 		ip_label.text = "IP: fetching…"
 		show_ip_btn.text = "Show"
 		return
+	var enet_code := _enet_share_code()
 	if _ip_visible:
 		# LAN IP = for players on the same Wi-Fi/network (including yourself).
 		# WAN IP = for players joining over the internet (needs port forward 4433).
-		ip_label.text = "LAN: %s  |  WAN: %s    port 4433" % [_lan_ip, _public_ip]
+		ip_label.text = "LAN: %s  |  WAN: %s  |  Code: %s" % [_lan_ip, _public_ip, enet_code]
 		show_ip_btn.text = "Hide"
 	else:
-		ip_label.text = "IP: ●●●●●●●●●●●"
+		ip_label.text = "IP/Code: ●●●●●●●●●●●"
 		show_ip_btn.text = "Show"
+
+
+func _enet_share_code() -> String:
+	var target := "%s:%d" % [_public_ip if _public_ip != "" else _lan_ip, lobby.DEFAULT_PORT]
+	return "M-" + Marshalls.utf8_to_base64(target)
+
+
+func _style_lobby_buttons() -> void:
+	var buttons : Array[Button] = [start_btn, back_btn, show_ip_btn, copy_code_btn]
+	for btn in buttons:
+		var normal := StyleBoxFlat.new()
+		normal.bg_color = Color(0.1, 0.22, 0.18, 0.95)
+		normal.border_color = Color(0.35, 0.85, 0.6, 0.85)
+		normal.set_border_width_all(2)
+		normal.set_corner_radius_all(10)
+		normal.set_content_margin_all(8)
+		btn.add_theme_stylebox_override("normal", normal)
+
+		var hover := normal.duplicate() as StyleBoxFlat
+		hover.bg_color = Color(0.15, 0.32, 0.26, 0.95)
+		btn.add_theme_stylebox_override("hover", hover)
+		btn.add_theme_stylebox_override("focus", hover)
+
+		var pressed := normal.duplicate() as StyleBoxFlat
+		pressed.bg_color = Color(0.07, 0.15, 0.12, 0.95)
+		btn.add_theme_stylebox_override("pressed", pressed)
+
+	public_toggle.add_theme_font_size_override("font_size", 15)
+	public_toggle.add_theme_color_override("font_color", Color(0.9, 0.98, 0.94))
+
+
+func _on_public_toggled(pressed: bool) -> void:
+	public_toggle.disabled = true
+	var ok : bool = await lobby.set_current_lobby_public(pressed)
+	public_toggle.disabled = false
+	if not ok:
+		public_toggle.set_pressed_no_signal(not pressed)
+
+
+func _set_ui_enabled(enabled: bool) -> void:
+	start_btn.disabled = not enabled
+	back_btn.disabled = not enabled
+	show_ip_btn.disabled = not enabled
+	copy_code_btn.disabled = not enabled
+	rounds_spin.editable = enabled
+	if public_toggle:
+		public_toggle.disabled = not enabled
+
+
+func _show_loading(text: String) -> void:
+	if _loading_layer == null:
+		_loading_layer = CanvasLayer.new()
+		_loading_layer.layer = 100
+		add_child(_loading_layer)
+		var bg := ColorRect.new()
+		bg.color = Color(0.0, 0.0, 0.0, 0.72)
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_loading_layer.add_child(bg)
+		_loading_label = Label.new()
+		_loading_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_loading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_loading_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_loading_label.add_theme_font_size_override("font_size", 30)
+		_loading_label.add_theme_color_override("font_color", Color.WHITE)
+		_loading_layer.add_child(_loading_label)
+	_loading_label.text = text
+	_loading_layer.visible = true
+
+
+func _hide_loading() -> void:
+	if _loading_layer:
+		_loading_layer.visible = false
