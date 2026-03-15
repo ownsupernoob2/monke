@@ -142,10 +142,10 @@ func set_buff_hint(buff_name: String) -> void:
 	if buff_hint_label == null:
 		return
 	match buff_name:
-		"Wind Rider":   buff_hint_label.text = "Wind Rider | [SPACE] Air Dash"
-		"Monkey Speed": buff_hint_label.text = "Monkey Speed | Speed Boost"
-		"Repulsor":     buff_hint_label.text = "Repulsor | Pushes IT Away"
-		"Attraction":   buff_hint_label.text = "Attraction | Pulls Bananas"
+		"Wind Rider":   buff_hint_label.text = "Wind Rider: Press [MMB] mid-air to dash"
+		"Monkey Speed": buff_hint_label.text = "Monkey Speed: Passive movement boost"
+		"Repulsor":     buff_hint_label.text = "Repulsor: Passive anti-IT push + poo deflect"
+		"Attraction":   buff_hint_label.text = "Attraction: Passive banana magnet (5m)"
 		_:              buff_hint_label.text = ""
 
 
@@ -168,7 +168,10 @@ func set_effects(effects: Array[Dictionary]) -> void:
 		var name := str(effect.get("name", "Effect"))
 		var stacks := int(effect.get("stacks", 1))
 		var time_left := float(effect.get("time_left", 0.0))
-		lbl.text = "%s x%d  %ds" % [name, stacks, maxi(int(ceili(time_left)), 0)]
+		var usage := "Passive"
+		if name == "Wind Rider":
+			usage = "MMB"
+		lbl.text = "%s x%d [%s]  %ds" % [name, stacks, usage, maxi(int(ceili(time_left)), 0)]
 		lbl.add_theme_font_size_override("font_size", 15)
 		lbl.add_theme_color_override("font_color", Color(0.92, 0.95, 1.0))
 		card.add_child(lbl)

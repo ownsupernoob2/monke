@@ -77,6 +77,7 @@ const GRAVITY           := 9.8
 const EFFECT_DURATION : float = 10.0
 const ATTRACTION_RADIUS : float = 5.0
 const ATTRACTION_PULL_SPEED : float = 4.5
+const OUTLINE_SHADER := preload("res://components/shaders/outline_shell.gdshader")
 
 # ── Multiplayer state ─────────────────────────────────────────────────────────
 ## True = this is the local player (gets camera/input). False = network puppet.
@@ -236,12 +237,15 @@ func _ready() -> void:
 		ev.keycode = KEY_Q
 		InputMap.action_add_event("shift_lock", ev)
 
-	# Wind Banana input action (Space).
+	# Wind Rider input action (Middle Mouse).
 	if not InputMap.has_action("air_dash"):
 		InputMap.add_action("air_dash")
-		var dash_ev := InputEventKey.new()
-		dash_ev.keycode = KEY_SPACE
-		InputMap.action_add_event("air_dash", dash_ev)
+	# Force a single canonical binding so old Space mappings do not linger.
+	InputMap.action_erase_events("air_dash")
+	var dash_ev := InputEventMouseButton.new()
+	dash_ev.button_index = MOUSE_BUTTON_MIDDLE
+	dash_ev.pressed = true
+	InputMap.action_add_event("air_dash", dash_ev)
 
 	_base_push_force = push_force
 	_base_release_cap = base_release_cap
@@ -1207,14 +1211,12 @@ func _update_buff_outline() -> void:
 		return
 	var outline := MeshInstance3D.new()
 	outline.mesh = torso.mesh
-	outline.scale = Vector3(1.12, 1.12, 1.12)
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.cull_mode = BaseMaterial3D.CULL_FRONT
-	mat.albedo_color = _get_buff_color(_active_buff)
-	mat.emission_enabled = true
-	mat.emission = _get_buff_color(_active_buff)
-	mat.emission_energy_multiplier = 1.8
+	outline.scale = Vector3(1.08, 1.08, 1.08)
+	var mat := ShaderMaterial.new()
+	mat.shader = OUTLINE_SHADER
+	mat.set_shader_parameter("outline_color", Color(_get_buff_color(_active_buff), 0.92))
+	mat.set_shader_parameter("rim_power", 3.3)
+	mat.set_shader_parameter("rim_strength", 1.15)
 	outline.material_override = mat
 	torso.add_child(outline)
 	_buff_outline = outline
@@ -1232,23 +1234,18 @@ func set_role_outline(enabled: bool, color: Color = Color.WHITE) -> void:
 	if _role_outline == null or not is_instance_valid(_role_outline):
 		var outline := MeshInstance3D.new()
 		outline.mesh = torso.mesh
-		outline.scale = Vector3(1.18, 1.18, 1.18)
-		var mat := StandardMaterial3D.new()
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mat.cull_mode = BaseMaterial3D.CULL_FRONT
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		mat.set_flag(BaseMaterial3D.FLAG_DISABLE_DEPTH_TEST, true)
-		mat.albedo_color = Color(color.r, color.g, color.b, 0.90)
-		mat.emission_enabled = true
-		mat.emission = color
-		mat.emission_energy_multiplier = 2.2
+		outline.scale = Vector3(1.12, 1.12, 1.12)
+		var mat := ShaderMaterial.new()
+		mat.shader = OUTLINE_SHADER
+		mat.set_shader_parameter("outline_color", Color(color, 0.98))
+		mat.set_shader_parameter("rim_power", 3.8)
+		mat.set_shader_parameter("rim_strength", 1.35)
 		outline.material_override = mat
 		torso.add_child(outline)
 		_role_outline = outline
-	if _role_outline.material_override is StandardMaterial3D:
-		var rmat := _role_outline.material_override as StandardMaterial3D
-		rmat.albedo_color = Color(color.r, color.g, color.b, 0.90)
-		rmat.emission = color
+	if _role_outline.material_override is ShaderMaterial:
+		var rmat := _role_outline.material_override as ShaderMaterial
+		rmat.set_shader_parameter("outline_color", Color(color, 0.98))
 	_role_outline.visible = true
 
 

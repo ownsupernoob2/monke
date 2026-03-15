@@ -455,16 +455,25 @@ func _update_hud_scores() -> void:
 			Color(1.0, 0.3, 0.3) if pid == _it_peer else Color.WHITE)
 		rows.add_child(row)
 
+	# Also mirror alive count to the built-in player HUD.
+	if _local_player and _local_player.hud:
+		_local_player.hud.update_alive_count(_alive_peers.size())
+		_local_player.hud.update_round_info(current_round, total_rounds)
+
 
 func _update_hud_timer() -> void:
 	if _hud_instance == null:
 		return
+	var total_secs : int = maxi(ceili(_round_timer), 0)
+	var mins : int = floori(float(total_secs) / 60.0)
+	var secs : int = total_secs % 60
 	var lbl : Label = _hud_instance.get_node_or_null("PanelContainer/VBox/TimerLabel")
 	if lbl:
-		var total_secs : int = maxi(ceili(_round_timer), 0)
-		var mins : int = floori(float(total_secs) / 60.0)
-		var secs : int = total_secs % 60
 		lbl.text = "⏱ %02d:%02d" % [mins, secs]
+
+	# Primary timer display in the standard player HUD (top-right).
+	if _local_player and _local_player.hud:
+		_local_player.hud.update_game_timer(float(total_secs))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

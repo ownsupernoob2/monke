@@ -53,13 +53,14 @@ shadow_enabled = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6480665, 3.0742502, 0.6206449)
 omni_range = 10.0
 
-[node name="MonkeyPivot" type="Node3D" parent="." unique_id=1204397523]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, -5)
-
-[node name="Platform" type="MeshInstance3D" parent="MonkeyPivot" unique_id=59471519]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.0733328, 0.22098786, -0.7062297)
+[node name="Platform" type="MeshInstance3D" parent="." unique_id=59471519]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.0733328, 0.052723825, -5.7062297)
 mesh = SubResource("CylinderMesh_plat")
+skeleton = NodePath("../MonkeyPivot")
 surface_material_override/0 = SubResource("mat_plat")
+
+[node name="MonkeyPivot" type="Node3D" parent="." unique_id=1204397523]
+transform = Transform3D(0.7, 0, 0, 0, 0.7, 0, 0, 0, 0.7, -3.0894082, 1.5974896, -5.8058496)
 
 [node name="MainCard" type="Node3D" parent="." unique_id=55415878]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.5, 0, -5)
