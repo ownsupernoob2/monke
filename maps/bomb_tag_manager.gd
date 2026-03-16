@@ -24,6 +24,12 @@ var _all_peer_ids : Array[int] = []
 var _scores : Dictionary = {}  # peer_id -> cumulative round points
 
 var _local_player : Player = null
+var _announce_layer : CanvasLayer = null
+var _announce_label : Label = null
+var _spectating : bool = false
+var _spectate_targets : Array[Player] = []
+var _spectate_index : int = 0
+var _spectate_camera : Camera3D = null
 
 
 func _ready() -> void:
@@ -46,6 +52,17 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_update_bomb_esp()
+	_update_bomb_indicator()
+	if _spectating and _spectate_camera and _spectate_targets.size() > 0:
+		_spectate_index = clampi(_spectate_index, 0, _spectate_targets.size() - 1)
+		var target : Player = _spectate_targets[_spectate_index]
+		if is_instance_valid(target) and not target.is_dead:
+			var behind := target.global_position + target.global_transform.basis.z * 3.0 + Vector3.UP * 1.5
+			_spectate_camera.global_position = _spectate_camera.global_position.lerp(behind, delta * 5.0)
+			_spectate_camera.look_at(target.global_position + Vector3.UP * 0.8)
+		else:
+			_refresh_spectate_targets()
+			_update_spectate_hud()
 	if not _round_active:
 		return
 
@@ -58,6 +75,17 @@ func _process(delta: float) -> void:
 
 	if GameLobby.is_host() and _bomb_timer <= 0.0:
 		_eliminate_bomb_holder()
+
+
+func _input(event: InputEvent) -> void:
+	if not _spectating:
+		return
+	if event.is_action_pressed("spectate_next"):
+		_cycle_spectate(1)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("spectate_prev"):
+		_cycle_spectate(-1)
+		get_viewport().set_input_as_handled()
 
 
 func _start_round() -> void:
@@ -92,6 +120,7 @@ func _start_round() -> void:
 		rpc("_rpc_set_bomb", first_bomb)
 		_rpc_set_bomb(first_bomb)
 
+	_stop_spectating()
 	_update_local_hud()
 
 
@@ -105,6 +134,8 @@ func _check_bomb_transfer() -> void:
 	if bomb_node == null or not is_instance_valid(bomb_node):
 		return
 	var bomb_pos : Vector3 = (bomb_node as Node3D).global_position
+	var closest_pid : int = -1
+	var closest_dist : float = INF
 
 	for child : Node in players_container.get_children():
 		if not (child is Player):
@@ -113,10 +144,13 @@ func _check_bomb_transfer() -> void:
 		var pid : int = p.get_multiplayer_authority()
 		if pid == _bomb_peer or p.is_dead or pid not in _alive_peers:
 			continue
-		if p.global_position.distance_to(bomb_pos) <= TAG_RANGE:
-			rpc("_rpc_set_bomb", pid)
-			_rpc_set_bomb(pid)
-			return
+		var distance := p.global_position.distance_to(bomb_pos)
+		if distance <= TAG_RANGE and distance < closest_dist:
+			closest_dist = distance
+			closest_pid = pid
+	if closest_pid >= 0:
+		rpc("_rpc_set_bomb", closest_pid)
+		_rpc_set_bomb(closest_pid)
 
 
 func _eliminate_bomb_holder() -> void:
@@ -128,9 +162,18 @@ func _eliminate_bomb_holder() -> void:
 
 @rpc("authority", "reliable", "call_local")
 func _rpc_set_bomb(peer_id: int) -> void:
+	var previous_bomb := _bomb_peer
 	_bomb_peer = peer_id
 	_bomb_timer = BOMB_DURATION
 	_transfer_cooldown = TAG_TRANSFER_COOLDOWN
+	var local_id : int = multiplayer.get_unique_id()
+	if peer_id == local_id:
+		_show_announcement("You have the bomb! Tag someone!")
+	elif previous_bomb == local_id:
+		_show_announcement("%s took the bomb." % _display_name(peer_id))
+	else:
+		_show_announcement("%s has the bomb." % _display_name(peer_id))
+	get_tree().create_timer(1.8).timeout.connect(_hide_announcement, CONNECT_ONE_SHOT)
 	_update_local_hud()
 
 
@@ -155,6 +198,12 @@ func _on_player_died(peer_id: int) -> void:
 		_finish_round()
 		return
 
+	if _local_player and peer_id == _local_player.get_multiplayer_authority():
+		_start_spectating()
+	elif _spectating:
+		_refresh_spectate_targets()
+		_update_spectate_hud()
+
 	if GameLobby.is_host() and peer_id == _bomb_peer and _alive_peers.size() > 0:
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
@@ -175,6 +224,10 @@ func _on_peer_left(peer_id: int) -> void:
 		_round_active = false
 		_finish_round()
 		return
+
+	if _spectating:
+		_refresh_spectate_targets()
+		_update_spectate_hud()
 
 	if GameLobby.is_host() and peer_id == _bomb_peer and _alive_peers.size() > 0:
 		var rng := RandomNumberGenerator.new()
@@ -207,6 +260,8 @@ func _rpc_round_over(updated_scores: Dictionary) -> void:
 	_round_active = false
 	_scores = updated_scores
 	_clear_all_esp()
+	_stop_spectating()
+	_clear_mode_status()
 
 	if current_round >= total_rounds and has_node("/root/GameSettings"):
 		get_node("/root/GameSettings").lps_match_complete = true
@@ -230,6 +285,13 @@ func _update_local_hud() -> void:
 	_local_player.hud.update_round_info(current_round, total_rounds)
 	_local_player.hud.update_alive_count(alive_count)
 	_local_player.hud.update_game_timer(_bomb_timer)
+	if _bomb_peer < 0:
+		_clear_mode_status()
+		return
+	if _bomb_peer == multiplayer.get_unique_id():
+		_local_player.hud.set_mode_status("YOU HAVE THE BOMB", ESP_COLOR_BOMB)
+	else:
+		_local_player.hud.set_mode_status("BOMB: %s" % _display_name(_bomb_peer), ESP_COLOR_TARGET)
 
 
 func _update_bomb_esp() -> void:
@@ -277,6 +339,114 @@ func _cache_local_player() -> void:
 			return
 
 
+func _update_bomb_indicator() -> void:
+	_update_local_hud()
+
+
+func _show_announcement(text: String) -> void:
+	_ensure_announce_ui()
+	_announce_label.text = text
+	_announce_layer.visible = true
+
+
+func _hide_announcement() -> void:
+	if _announce_layer:
+		_announce_layer.visible = false
+
+
+func _ensure_announce_ui() -> void:
+	if _announce_layer:
+		return
+	_announce_layer = CanvasLayer.new()
+	_announce_layer.layer = 8
+	add_child(_announce_layer)
+	_announce_label = Label.new()
+	_announce_label.anchors_preset = Control.PRESET_CENTER
+	_announce_label.offset_left = -320.0
+	_announce_label.offset_right = 320.0
+	_announce_label.offset_top = -40.0
+	_announce_label.offset_bottom = 40.0
+	_announce_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_announce_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_announce_label.add_theme_font_size_override("font_size", 36)
+	_announce_label.add_theme_color_override("font_color", ESP_COLOR_BOMB)
+	_announce_layer.add_child(_announce_label)
+
+
+func _start_spectating() -> void:
+	if _spectating:
+		return
+	_spectating = true
+	_refresh_spectate_targets()
+	if not _spectate_camera:
+		_spectate_camera = Camera3D.new()
+		_spectate_camera.name = "SpectateCamera"
+		get_parent().add_child(_spectate_camera)
+	_spectate_index = 0
+	_spectate_camera.current = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_update_spectate_hud()
+
+
+func _stop_spectating() -> void:
+	if not _spectating:
+		return
+	_spectating = false
+	_spectate_targets.clear()
+	if _spectate_camera:
+		_spectate_camera.queue_free()
+		_spectate_camera = null
+	if _local_player and is_instance_valid(_local_player) and not _local_player.is_dead:
+		_local_player.camera.make_current()
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if _local_player and _local_player.hud:
+		_local_player.hud.hide_spectating()
+
+
+func _cycle_spectate(direction: int) -> void:
+	_refresh_spectate_targets()
+	if _spectate_targets.is_empty():
+		return
+	_spectate_index = (_spectate_index + direction) % _spectate_targets.size()
+	if _spectate_index < 0:
+		_spectate_index = _spectate_targets.size() - 1
+	_update_spectate_hud()
+
+
+func _refresh_spectate_targets() -> void:
+	_spectate_targets.clear()
+	var players_container : Node = get_parent().get_node_or_null("Players")
+	if not players_container:
+		return
+	for child : Node in players_container.get_children():
+		if child is Player and not child.is_dead and not child.is_local:
+			_spectate_targets.append(child as Player)
+	if _spectate_targets.size() > 0:
+		_spectate_index = clampi(_spectate_index, 0, _spectate_targets.size() - 1)
+
+
+func _update_spectate_hud() -> void:
+	if _local_player == null or _local_player.hud == null:
+		return
+	if _spectate_targets.is_empty():
+		_local_player.hud.show_spectating("Waiting...")
+		return
+	_spectate_index = clampi(_spectate_index, 0, _spectate_targets.size() - 1)
+	var target : Player = _spectate_targets[_spectate_index]
+	_local_player.hud.show_spectating(_display_name(target.get_multiplayer_authority()))
+
+
+func _clear_mode_status() -> void:
+	if _local_player and _local_player.hud:
+		_local_player.hud.clear_mode_status()
+
+
+func _display_name(peer_id: int) -> String:
+	if has_node("/root/GameLobby"):
+		return GameLobby.display_name(peer_id)
+	return "Player %d" % peer_id
+
+
 func _configure_bananas() -> void:
 	_configure_bananas_recursive(get_parent())
 
@@ -302,3 +472,5 @@ func _configure_bananas_recursive(node: Node) -> void:
 
 func _on_server_closed() -> void:
 	_round_active = false
+	_stop_spectating()
+	_clear_mode_status()

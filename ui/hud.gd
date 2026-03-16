@@ -20,6 +20,7 @@ extends CanvasLayer
 
 # ── Buff hint (bottom-centre, created dynamically) ───────────────────────────
 var buff_hint_label : Label = null
+var mode_status_label : Label = null
 var effects_list : VBoxContainer = null
 
 
@@ -45,6 +46,21 @@ func _ready() -> void:
 	buff_hint_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	buff_hint_label.text = ""
 	$Control.add_child(buff_hint_label)
+
+	mode_status_label = Label.new()
+	mode_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mode_status_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	mode_status_label.offset_left = -260.0
+	mode_status_label.offset_right = 260.0
+	mode_status_label.offset_top = 26.0
+	mode_status_label.offset_bottom = 58.0
+	mode_status_label.add_theme_font_size_override("font_size", 20)
+	mode_status_label.add_theme_constant_override("outline_size", 3)
+	mode_status_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	mode_status_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.25))
+	mode_status_label.text = ""
+	mode_status_label.visible = false
+	$Control.add_child(mode_status_label)
 
 	# Effect cards shown on the left, like potion effects.
 	effects_list = VBoxContainer.new()
@@ -176,6 +192,18 @@ func set_effects(effects: Array[Dictionary]) -> void:
 		lbl.add_theme_color_override("font_color", Color(0.92, 0.95, 1.0))
 		card.add_child(lbl)
 		effects_list.add_child(card)
+
+
+func set_mode_status(text: String, color: Color = Color(1.0, 0.8, 0.25)) -> void:
+	if mode_status_label == null:
+		return
+	mode_status_label.text = text
+	mode_status_label.add_theme_color_override("font_color", color)
+	mode_status_label.visible = text != ""
+
+
+func clear_mode_status() -> void:
+	set_mode_status("")
 
 
 # ── Game-state updates (called by LPS manager) ──────────────────────────────

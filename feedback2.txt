@@ -1,0 +1,36 @@
+
+Flaws and bugs
+
+
+Games:
+The bomb tag is bugged, first the bomb tagger has no idea if they are the bomb tagger.
+secondly where is the ESP outline to show where players are for bomb tagger and such, including regular tag.
+Make sure the transfer of the bomb works and that the player who dies goes into specatator mode.
+Finally make sure when 1 player is left we end the round.
+Where did banana frenzy go on the option? i know only 3 are supposed to show, but the same gamemode shouldnt show twice in a row on the options, to keep it fresh.
+
+Map:
+I want canyon to focus alot more on bouncing off of things like walls and curved walls, so currently it has less vines whcih is good,
+but not much things the player can do to move around, add alot more things, maybe even those canyon gap holes.
+
+ everyone shouldn't  spawn on the same platform, spread them out, add spawners where a player can spawn, no two players or more can spawn on the same platform.
+Moon forest is a bit too dark, add moonlight.
+
+Buff:
+repulsion is useless for tag games, dont make it an option buff when selecting.
+Repulsion doesnt work actually.
+Attractions of bananas isnt working.
+For wind glider, stop the player mid air for split second when used to give that feeling of "riding the wind"
+
+
+Gameplay:
+My friend complained that being on the ground sucks, he suggested a map with it being enclosed with all bouncing trampoline including the walls, not sure about other maps. In my opinion, i want being on the ground to be unpleasent, the point of the game is to stay off the ground.
+Have a cool camera animation circling the player who won in the  game before teleporting them back to the lobby.
+The leaderboard names arent showing, i told you not to use labels cause they follow the camera, if you can make it stop following the camera that would be nice, if not, use the viewport texture with cards ontop.
+For games like banana frenzy and last person standing, there is no
+
+Multiplayer:
+Lobby terminating and creation is still very bugged, i can leave, join back and leave, and it will show as if theres 2 players in the game.
+I played with my friends and it said 8/8 and he couldnt join when it was actually 4/8. The room code for me (the host) also was different from all of my friends.
+The order of players in the lobby is also weird.
+
