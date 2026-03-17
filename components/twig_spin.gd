@@ -1,11 +1,7 @@
 class_name TwigSpin
 extends Node3D
 
-@export var orbit_radius : float = 2.4
-@export var orbit_height : float = 0.2
-@export var angular_damping : float = 0.985
-@export var steer_accel : float = 4.5
-@export var pump_impulse : float = 1.7
+@export var grab_height : float = 0.2
 
 
 func _ready() -> void:
@@ -24,30 +20,20 @@ func _ready() -> void:
 	twig_vis.position = Vector3(0.0, 0.8, 0.0)
 	add_child(twig_vis)
 
-	var ring_body := StaticBody3D.new()
-	ring_body.name = "GrabBody"
-	ring_body.collision_layer = 4
-	ring_body.collision_mask = 0
-	ring_body.position = Vector3(0.0, orbit_height, 0.0)
-	ring_body.set_meta("twig_spin", self)
-	add_child(ring_body)
+	var grab_body := StaticBody3D.new()
+	grab_body.name = "GrabBody"
+	grab_body.collision_layer = 4
+	grab_body.collision_mask = 0
+	grab_body.position = Vector3(0.0, grab_height, 0.0)
+	grab_body.set_meta("twig_spin", self)
+	add_child(grab_body)
 
-	var ring_col := CollisionShape3D.new()
-	var ring_shape := SphereShape3D.new()
-	ring_shape.radius = orbit_radius + 0.08
-	ring_col.shape = ring_shape
-	ring_body.add_child(ring_col)
-
-
-func orbit_pos(theta: float) -> Vector3:
-	var local := Vector3(cos(theta), 0.0, sin(theta)) * orbit_radius + Vector3(0.0, orbit_height, 0.0)
-	return global_position + local
+	var grab_col := CollisionShape3D.new()
+	var grab_shape := SphereShape3D.new()
+	grab_shape.radius = 0.15
+	grab_col.shape = grab_shape
+	grab_body.add_child(grab_col)
 
 
-func tangent_dir(theta: float) -> Vector3:
-	return Vector3(-sin(theta), 0.0, cos(theta)).normalized()
-
-
-func project_angle(world_pos: Vector3) -> float:
-	var local := world_pos - global_position
-	return atan2(local.z, local.x)
+func grab_pos() -> Vector3:
+	return global_position + Vector3(0.0, grab_height, 0.0)

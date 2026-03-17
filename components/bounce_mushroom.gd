@@ -1,7 +1,7 @@
 class_name BounceMushroom
 extends Area3D
 
-@export var bounce_speed : float = 18.0
+@export var bounce_speed : float = 12.0
 @export var min_horizontal_speed : float = 7.0
 @export var horizontal_scale : float = 1.15
 @export var hit_cooldown : float = 0.22

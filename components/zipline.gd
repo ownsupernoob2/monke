@@ -14,6 +14,9 @@ extends Node3D
 
 @onready var end_marker : Marker3D = $EndMarker
 
+## Friction damping for the ring slide (0.0 = no friction/full speed, 1.0 = maximum friction).
+@export var friction : float = 0.15
+
 ## World-space properties cached in _ready for use by Player physics.
 var direction : Vector3 = Vector3.RIGHT
 var start_pos : Vector3 = Vector3.ZERO

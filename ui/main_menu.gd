@@ -14,10 +14,11 @@ const CARD_FLOAT_SPEED := 0.9
 const FIREFLY_COUNT := 18
 
 # ── Section layout ────────────────────────────────────────────────────────────
-enum Section { MAIN, SETTINGS, CUSTOMIZE }
+enum Section { TITLE, MAIN, SETTINGS, CUSTOMIZE }
 
 # Camera pivot target Y-rotation for each section.
 const CAM_Y := {
+	Section.TITLE:     0.0,
 	Section.MAIN:      0.0,
 	Section.SETTINGS:  PI / 2.0,
 	Section.CUSTOMIZE: PI,
@@ -25,11 +26,13 @@ const CAM_Y := {
 
 # Card world positions and facing rotations.
 const CARD_POS := {
+	Section.TITLE:     Vector3(-4.0, 0, -3),
 	Section.MAIN:      Vector3(1.5, 0, -5),
 	Section.SETTINGS:  Vector3(-5, 0, 0),
 	Section.CUSTOMIZE: Vector3(0, 0, 5),
 }
 const CARD_ROT_Y := {
+	Section.TITLE:     PI * 0.75,
 	Section.MAIN:      PI,
 	Section.SETTINGS:  PI / 2.0,
 	Section.CUSTOMIZE: 0.0,
@@ -37,6 +40,8 @@ const CARD_ROT_Y := {
 
 const CARD_VP_SIZE    := Vector2i(560, 760)
 const CARD_QUAD_SIZE  := Vector2(3.2, 4.2)
+const TITLE_VP_SIZE   := Vector2i(480, 640)
+const TITLE_QUAD_SIZE := Vector2(2.8, 3.8)
 const SETTINGS_VP_SIZE := Vector2i(600, 820)
 const SETTINGS_QUAD_SIZE := Vector2(3.4, 4.6)
 const TRANSITION_TIME := 0.8
@@ -57,6 +62,7 @@ var _base_monkey_y : float = 0.0
 # ── .tscn references ─────────────────────────────────────────────────────────
 @onready var camera_pivot         := $CameraPivot
 @onready var monkey_pivot         := $MonkeyPivot
+@onready var _title_card_node     : Node3D = get_node_or_null("TitleCard") as Node3D
 @onready var _main_card_node      : Node3D = get_node_or_null("MainCard") as Node3D
 @onready var _settings_card_node  : Node3D = get_node_or_null("SettingsCard") as Node3D
 @onready var _customize_card_node : Node3D = get_node_or_null("CustomizeCard") as Node3D
@@ -74,15 +80,18 @@ var _sens_lbl          : Label    = null
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_title_card_node = _ensure_card_node(_title_card_node, Section.TITLE, TITLE_VP_SIZE, TITLE_QUAD_SIZE)
 	_main_card_node = _ensure_card_node(_main_card_node, Section.MAIN, CARD_VP_SIZE, CARD_QUAD_SIZE)
 	_settings_card_node = _ensure_card_node(_settings_card_node, Section.SETTINGS, SETTINGS_VP_SIZE, SETTINGS_QUAD_SIZE)
 	_customize_card_node = _ensure_card_node(_customize_card_node, Section.CUSTOMIZE, CARD_VP_SIZE, CARD_QUAD_SIZE)
 	_setup_monkey()
+	_build_title_card()
 	_build_main_card()
 	_build_settings_card()
 	_build_customize_card()
 	_setup_card_idle_bases()
 	_build_ambient_fx()
+	_build_arrow_buttons()
 	_build_version_label()
 	_base_cam_pos = camera_pivot.position
 	_base_cam_rot_x = camera_pivot.rotation.x
@@ -97,7 +106,6 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_fx_time += delta
-	monkey_pivot.rotate_y(SPIN_SPEED * delta)
 	monkey_pivot.position.y = _base_monkey_y + sin(_fx_time * MONKEY_BOB_SPEED) * MONKEY_BOB_AMPLITUDE
 
 	# Subtle camera breathing to keep the scene alive.
@@ -190,6 +198,8 @@ func _use_card(section: Section, card: Node3D) -> Dictionary:
 	var mesh_inst : MeshInstance3D = card.get_node("MeshInstance3D")
 	if section == Section.SETTINGS:
 		vp.size = SETTINGS_VP_SIZE
+	elif section == Section.TITLE:
+		vp.size = TITLE_VP_SIZE
 	else:
 		vp.size = CARD_VP_SIZE
 	call_deferred("_apply_vp_material", mesh_inst, vp)
@@ -333,20 +343,49 @@ func _build_main_card() -> void:
 	var vbox := VBoxContainer.new()
 	vbox.size = Vector2(vp.size)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 10)
+	vbox.add_theme_constant_override("separation", 12)
 	vp.add_child(vbox)
+
+	_spacer(vbox, 20)
+
+	_styled_button("PLAY", vbox, 28).pressed.connect(_on_play)
+	_styled_button("TUTORIAL", vbox, 28).pressed.connect(_on_tutorial)
+	_styled_button("PLAYGROUND", vbox, 28).pressed.connect(_on_playground)
+	_styled_button("SETTINGS", vbox, 28).pressed.connect(
+			func(): _transition_to(Section.SETTINGS))
+
+	_spacer(vbox, 12)
+
+	_styled_button("EXIT", vbox, 28, Color(0.85, 0.55, 0.5)).pressed.connect(_on_exit)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  TITLE CARD
+# ══════════════════════════════════════════════════════════════════════════════
+
+func _build_title_card() -> void:
+	var info := _use_card(Section.TITLE, _title_card_node)
+	var vp : SubViewport = info.viewport
+	vp.transparent_bg = true
+
+	var vbox := VBoxContainer.new()
+	vbox.size = Vector2(vp.size)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vp.add_child(vbox)
+
+	_spacer(vbox, 80)
 
 	var title := Label.new()
 	title.text = "MONKE"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 80)
+	title.add_theme_font_size_override("font_size", 72)
 	title.add_theme_color_override("font_color", Color(0.9, 0.78, 0.25))
 	vbox.add_child(title)
 
 	var subtitle := Label.new()
 	subtitle.text = "need banana"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.add_theme_font_size_override("font_size", 20)
+	subtitle.add_theme_font_size_override("font_size", 18)
 	subtitle.add_theme_color_override("font_color", Color(0.55, 0.72, 0.45, 0.85))
 	vbox.add_child(subtitle)
 
@@ -354,20 +393,6 @@ func _build_main_card() -> void:
 	pulse.set_loops()
 	pulse.tween_property(title, "modulate", Color(1.0, 0.9, 0.35, 1.0), 0.7)
 	pulse.tween_property(title, "modulate", Color(0.9, 0.78, 0.25, 1.0), 0.7)
-
-	_spacer(vbox, 24)
-
-	_styled_button("PLAY", vbox, 28).pressed.connect(_on_play)
-	_styled_button("TUTORIAL", vbox, 28).pressed.connect(_on_tutorial)
-	_styled_button("CUSTOMIZE", vbox, 28, Color(0.9, 0.78, 0.25)).pressed.connect(
-			func(): _transition_to(Section.CUSTOMIZE))
-	_styled_button("PLAYGROUND", vbox, 28).pressed.connect(_on_playground)
-	_styled_button("SETTINGS", vbox, 28).pressed.connect(
-			func(): _transition_to(Section.SETTINGS))
-
-	_spacer(vbox, 8)
-
-	_styled_button("EXIT", vbox, 28, Color(0.85, 0.55, 0.5)).pressed.connect(_on_exit)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -377,11 +402,7 @@ func _build_main_card() -> void:
 func _build_settings_card() -> void:
 	var info := _use_card(Section.SETTINGS, _settings_card_node)
 	var vp : SubViewport = info.viewport
-
-	var bg := ColorRect.new()
-	bg.color = Color(0.05, 0.1, 0.04)
-	bg.size = Vector2(vp.size)
-	vp.add_child(bg)
+	vp.transparent_bg = true
 
 	var vbox := VBoxContainer.new()
 	vbox.position = Vector2(28, 24)
@@ -690,3 +711,72 @@ func _show_disconnect_popup(msg: String) -> void:
 	dialog.min_size = Vector2i(320, 100)
 	layer.add_child(dialog)
 	dialog.popup_centered()
+
+
+func _build_arrow_buttons() -> void:
+	## Four small 3D arrow cards positioned around the monkey.
+	## Upper left/right for hats, lower left/right for face/shirt.
+	var arrow_positions := [
+		{"pos": Vector3(-1.8, 0.8, 0.0), "arrow": "◀", "model_type": "hat", "dir": -1},
+		{"pos": Vector3(1.8, 0.8, 0.0), "arrow": "▶", "model_type": "hat", "dir": 1},
+		{"pos": Vector3(-1.8, -0.8, 0.0), "arrow": "◀", "model_type": "face", "dir": -1},
+		{"pos": Vector3(1.8, -0.8, 0.0), "arrow": "▶", "model_type": "face", "dir": 1},
+	]
+	
+	for config in arrow_positions:
+		var card := Node3D.new()
+		card.position = config.pos
+		monkey_pivot.add_child(card)
+		
+		var vp := SubViewport.new()
+		vp.name = "VP"
+		vp.size = Vector2i(80, 80)
+		vp.transparent_bg = true
+		vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		card.add_child(vp)
+		
+		var btn := Button.new()
+		btn.text = config.arrow
+		btn.custom_minimum_size = Vector2(80, 80)
+		btn.add_theme_font_size_override("font_size", 36)
+		btn.add_theme_color_override("font_color", Color(0.9, 0.78, 0.25))
+		
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.12, 0.28, 0.10, 0.85)
+		sb.border_color = Color(0.35, 0.72, 0.28)
+		sb.set_border_width_all(2)
+		sb.set_corner_radius_all(8)
+		btn.add_theme_stylebox_override("normal", sb)
+		
+		var hover := sb.duplicate() as StyleBoxFlat
+		hover.bg_color = Color(0.18, 0.44, 0.14, 0.95)
+		hover.border_color = Color(0.50, 0.92, 0.38)
+		btn.add_theme_stylebox_override("hover", hover)
+		btn.add_theme_stylebox_override("focus", hover)
+		
+		btn.pressed.connect(func(): _cycle_model(config.model_type, config.dir))
+		vp.add_child(btn)
+		
+		var mesh_inst := MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2(0.4, 0.4)
+		quad.flip_faces = true
+		mesh_inst.mesh = quad
+		mesh_inst.position.y = 0.2
+		card.add_child(mesh_inst)
+		
+		var mat := StandardMaterial3D.new()
+		mat.albedo_texture = vp.get_texture()
+		mat.uv1_scale = Vector3(-1, 1, 1)
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mesh_inst.set_surface_override_material(0, mat)
+
+
+
+
+func _cycle_model(model_type: String, direction: int) -> void:
+	## Placeholder for model cycling logic.
+	## model_type: "hat" or "face" (face includes shirt)
+	## direction: -1 (prev) or 1 (next)
+	print("Cycling %s model in direction %d" % [model_type, direction])

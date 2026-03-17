@@ -861,18 +861,14 @@ func _release_hand(is_left: bool) -> void:
 				# Zipline keeps its legacy punch on release.
 				carry = l_dir * (_left_zip_vel * release_boost_mult)
 			elif _left_twig:
-				var l_tan : Vector3 = _left_twig.call("tangent_dir", _left_twig_angle)
-				var l_radius := maxf(float(_left_twig.get("orbit_radius")), 0.1)
-				carry = l_tan * (_left_twig_avel * l_radius)
+				carry = Vector3.ZERO  # Twig is static, no swing momentum
 		else:
 			if _right_zipline:
 				var r_dir : Vector3 = _right_zipline.get("direction")
 				# Zipline keeps its legacy punch on release.
 				carry = r_dir * (_right_zip_vel * release_boost_mult)
 			elif _right_twig:
-				var r_tan : Vector3 = _right_twig.call("tangent_dir", _right_twig_angle)
-				var r_radius := maxf(float(_right_twig.get("orbit_radius")), 0.1)
-				carry = r_tan * (_right_twig_avel * r_radius)
+				carry = Vector3.ZERO  # Twig is static, no swing momentum
 		velocity += carry
 		_fov_pulse = clampf(carry.length() * 1.8, 0.0, 18.0)
 		if _combo_hold_timer > combo_hold_limit:
@@ -934,8 +930,10 @@ func _update_zipline_pivots(delta: float) -> void:
 	if _left_zipline and left_hand_state == HandState.GRABBING:
 		var l_dir : Vector3 = _left_zipline.get("direction")
 		var l_len : float = float(_left_zipline.get("length"))
+		var l_friction : float = float(_left_zipline.get("friction"))
 		var g_along := Vector3(0.0, -GRAVITY, 0.0).dot(l_dir)
 		_left_zip_vel += g_along * delta
+		_left_zip_vel *= (1.0 - l_friction)
 		_left_zip_t   += _left_zip_vel * delta
 		_left_zip_t    = clampf(_left_zip_t, 0.0, l_len)
 		if _left_zip_t <= 0.0 and _left_zip_vel < 0.0:
@@ -945,28 +943,15 @@ func _update_zipline_pivots(delta: float) -> void:
 		_left_pivot = _left_zipline.call("slide_pos", _left_zip_t)
 		left_hand.update_grab_pos(_left_pivot)
 	if _left_twig and left_hand_state == HandState.GRABBING:
-		var look := -head.global_transform.basis.z
-		look.y = 0.0
-		if look.length_squared() > 0.001:
-			look = look.normalized()
-			var l_tan : Vector3 = _left_twig.call("tangent_dir", _left_twig_angle)
-			var desired_sign := signf(l_tan.dot(look))
-			if desired_sign != 0.0:
-				_left_twig_avel += desired_sign * float(_left_twig.get("steer_accel")) * delta
-		if right_hand_state == HandState.FREE and Input.is_action_just_pressed("push_right"):
-			var pump_sign := signf(_left_twig_avel)
-			if pump_sign == 0.0:
-				pump_sign = 1.0
-			_left_twig_avel += pump_sign * float(_left_twig.get("pump_impulse"))
-		_left_twig_avel *= pow(float(_left_twig.get("angular_damping")), delta * 60.0)
-		_left_twig_angle += _left_twig_avel * delta
-		_left_pivot = _left_twig.call("orbit_pos", _left_twig_angle)
+		_left_pivot = _left_twig.call("grab_pos")
 		left_hand.update_grab_pos(_left_pivot)
 	if _right_zipline and right_hand_state == HandState.GRABBING:
 		var r_dir : Vector3 = _right_zipline.get("direction")
 		var r_len : float = float(_right_zipline.get("length"))
+		var r_friction : float = float(_right_zipline.get("friction"))
 		var g_along := Vector3(0.0, -GRAVITY, 0.0).dot(r_dir)
 		_right_zip_vel += g_along * delta
+		_right_zip_vel *= (1.0 - r_friction)
 		_right_zip_t   += _right_zip_vel * delta
 		_right_zip_t    = clampf(_right_zip_t, 0.0, r_len)
 		if _right_zip_t <= 0.0 and _right_zip_vel < 0.0:
@@ -976,22 +961,7 @@ func _update_zipline_pivots(delta: float) -> void:
 		_right_pivot = _right_zipline.call("slide_pos", _right_zip_t)
 		right_hand.update_grab_pos(_right_pivot)
 	if _right_twig and right_hand_state == HandState.GRABBING:
-		var look_r := -head.global_transform.basis.z
-		look_r.y = 0.0
-		if look_r.length_squared() > 0.001:
-			look_r = look_r.normalized()
-			var r_tan : Vector3 = _right_twig.call("tangent_dir", _right_twig_angle)
-			var desired_sign_r := signf(r_tan.dot(look_r))
-			if desired_sign_r != 0.0:
-				_right_twig_avel += desired_sign_r * float(_right_twig.get("steer_accel")) * delta
-		if left_hand_state == HandState.FREE and Input.is_action_just_pressed("push_left"):
-			var pump_sign_r := signf(_right_twig_avel)
-			if pump_sign_r == 0.0:
-				pump_sign_r = 1.0
-			_right_twig_avel += pump_sign_r * float(_right_twig.get("pump_impulse"))
-		_right_twig_avel *= pow(float(_right_twig.get("angular_damping")), delta * 60.0)
-		_right_twig_angle += _right_twig_avel * delta
-		_right_pivot = _right_twig.call("orbit_pos", _right_twig_angle)
+		_right_pivot = _right_twig.call("grab_pos")
 		right_hand.update_grab_pos(_right_pivot)
 
 
