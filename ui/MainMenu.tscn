@@ -38,15 +38,14 @@ script = ExtResource("1")
 transform = Transform3D(1, 0, 0, 0, 0.993, 0.12, 0, -0.12, 0.993, 0, 2.5, 0)
 
 [node name="Camera3D" type="Camera3D" parent="CameraPivot" unique_id=1257286626]
-transform = Transform3D(1, 0, 0, 0, 0.99977565, 1.0430813e-07, 0, -1.0430813e-07, 0.99977565, -1.0558047, 0.17164111, 1.3495692)
+transform = Transform3D(1.0001069, -0.0018333346, 0.015174113, 0.001835873, 0.99977076, 1.4051795e-05, -0.015192036, 6.711483e-05, 0.9994397, -1.0558047, 0.17164111, 1.3495692)
 fov = 55.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=853122711]
 environment = SubResource("env")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1577563657]
-transform = Transform3D(1, 0, 0, 0, 0.766, -0.643, 0, 0.643, 0.766, 0, 3, 0)
-light_energy = 1.2
+transform = Transform3D(1, 0, 0, 0, 0.98619026, 0.16561636, 0, -0.16561636, 0.98619026, 0, 4.9228125, 1.7329997)
 shadow_enabled = true
 
 [node name="OmniLight3D" type="OmniLight3D" parent="." unique_id=386372079]
@@ -82,7 +81,7 @@ size = Vector2i(440, 600)
 render_target_update_mode = 3
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="SettingsCard" unique_id=1323457102]
-transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 0, 2.3, 0)
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, -0.950413, 2.3, -0.45890808)
 mesh = SubResource("quad_settings")
 
 [node name="CustomizeCard" type="Node3D" parent="." unique_id=1292237247]
@@ -93,5 +92,13 @@ size = Vector2i(420, 560)
 render_target_update_mode = 3
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="CustomizeCard" unique_id=1245628658]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0895402, 2.1, 1.0167465)
 mesh = SubResource("quad_main")
+
+[node name="DirectionalLight3D2" type="DirectionalLight3D" parent="." unique_id=332597694]
+transform = Transform3D(0.042050075, -7.450581e-09, 0.9991155, -0.9931677, 0.10895293, 0.041799743, -0.10885656, -0.99404705, 0.004581481, 0.07146842, 3.435305, 0.66450703)
+shadow_enabled = true
+
+[node name="DirectionalLight3D3" type="DirectionalLight3D" parent="." unique_id=2027486772]
+transform = Transform3D(1, 0, 0, 0, -0.99354815, 0.11341059, 0, -0.11341059, -0.99354815, 0, 3.5844998, 1.6225934)
+shadow_enabled = true

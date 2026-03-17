@@ -9,6 +9,7 @@ var selected_map : String = "res://maps/SwampForest.tscn"
 var selected_gamemode : String = "Last Person Standing"
 var selected_buff : String = ""
 var round_count : int = 3
+var last_excluded_gamemode : String = ""
 
 # ── LPS match state (persists across rounds / scene changes) ────────────────
 var lps_scores         : Dictionary = {}   # peer_id → cumulative points
@@ -21,6 +22,7 @@ func lps_clear() -> void:
 	lps_current_round  = 0
 	lps_match_active   = false
 	lps_match_complete = false
+	last_excluded_gamemode = ""
 
 # ── Player ──────────────────────────────────────────────────
 var player_name : String = ""

@@ -1,0 +1,25 @@
+[gd_scene load_steps=4 format=3 uid="uid://bounce_mushroom_component"]
+
+[ext_resource type="Script" path="res://components/bounce_mushroom.gd" id="1_mush"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_1"]
+top_radius = 1.7
+bottom_radius = 1.2
+height = 1.7
+radial_segments = 12
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_1"]
+radius = 1.65
+
+[node name="BounceMushroom" type="Area3D"]
+script = ExtResource("1_mush")
+collision_layer = 0
+collision_mask = 1
+
+[node name="Visual" type="MeshInstance3D" parent="."]
+mesh = SubResource("CylinderMesh_1")
+position = Vector3(0, 0.85, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_1")
+position = Vector3(0, 1.35, 0)

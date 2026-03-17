@@ -78,7 +78,9 @@ func _ready() -> void:
 		add_child(chat_scene.instantiate())
 
 	# Create display models for every player already in the lobby.
-	for id : int in lobby.players.keys():
+	var ordered_ids : Array = lobby.players.keys()
+	ordered_ids.sort()
+	for id : int in ordered_ids:
 		var p_name : String = lobby.players[id]["name"]
 		_spawn_player_model(id, p_name)
 	_update_count()
@@ -121,14 +123,24 @@ func _remove_player_model(id: int) -> void:
 
 
 func _reposition_models() -> void:
-	var i : int = 0
+	var models : Array[Node] = []
 	for child : Node in player_container.get_children():
+		models.append(child)
+	models.sort_custom(func(a: Node, b: Node) -> bool:
+		var a_id := int(str(a.name).trim_prefix("P_"))
+		var b_id := int(str(b.name).trim_prefix("P_"))
+		return a_id < b_id
+	)
+	var i : int = 0
+	for child : Node in models:
 		child.position.x = i * 1.6 - 3.2
 		i += 1
 
 
 func _update_count() -> void:
 	count_label.text = "Players: %d / %d" % [lobby.players.size(), lobby.MAX_PLAYERS]
+	if lobby.is_host():
+		start_btn.disabled = lobby.players.size() < 2
 
 
 # ── Signals ───────────────────────────────────────────────────────────────────
@@ -168,6 +180,9 @@ func _on_server_closed() -> void:
 
 
 func _on_start() -> void:
+	if lobby.players.size() < 2:
+		count_label.text = "Players: %d / %d  (Need at least 2 to start)" % [lobby.players.size(), lobby.MAX_PLAYERS]
+		return
 	lobby.start_game()
 
 

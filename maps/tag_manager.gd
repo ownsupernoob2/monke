@@ -117,10 +117,12 @@ func _input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("spectate_next"):
 		_cycle_spectate(1)
-		get_viewport().set_input_as_handled()
+		if is_inside_tree():
+			get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("spectate_prev"):
 		_cycle_spectate(-1)
-		get_viewport().set_input_as_handled()
+		if is_inside_tree():
+			get_viewport().set_input_as_handled()
 
 
 # ══════════════════════════════════════════════════════════════════════════════

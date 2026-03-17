@@ -1,9 +1,10 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://maps/main.gd" id="1"]
 [ext_resource type="PackedScene" path="res://components/Player.tscn" id="2"]
 [ext_resource type="PackedScene" path="res://components/Banana.tscn" id="3"]
 [ext_resource type="PackedScene" path="res://components/Vine.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://components/Zipline.tscn" id="5"]
 [ext_resource type="Script" path="res://maps/banana_spawner.gd" id="7"]
 
 ; ── Red Canyon: scorched desert, dusty orange, harsh sun ─────────────────────
@@ -350,83 +351,354 @@ surface_material_override/0 = SubResource("CactusMat")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
 shape = SubResource("CactusShape")
 
-; ── Hanging ropes (same Vine physics – old mining cables from pillar tops) ───
+; ── Hanging ropes – brown mining cable, varied height, paired & arced ────────
 [node name="Ropes" type="Node3D" parent="."]
 
+; Low ground-grab ropes (avoid overhead head-bumps while moving)
 [node name="Rope_01" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 18, -13)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 4, -4)
 
 [node name="Rope_02" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 19, -10)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 5, -4)
 
 [node name="Rope_03" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 17, -8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 4, -18)
 
 [node name="Rope_04" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 18.5, -14)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 5, 18)
 
 [node name="Rope_05" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 19, -8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 4, 0)
 
 [node name="Rope_06" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 17, -6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25, 4, 0)
 
+; Mid-height paired ropes for left/right wall jumping across gaps
 [node name="Rope_07" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -23, 18, 4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 8, -8)
 
 [node name="Rope_08" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -27, 19.5, 10)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 8, -8)
 
 [node name="Rope_09" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 17, 12)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 8, -10)
 
 [node name="Rope_10" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 23, 18, 8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 8, -10)
 
 [node name="Rope_11" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 27, 19, 14)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 7, 4)
 
 [node name="Rope_12" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 17.5, 5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 7, 4)
 
 [node name="Rope_13" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 18, -20)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 9, 4)
 
 [node name="Rope_14" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 19, -24)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 9, 4)
 
 [node name="Rope_15" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 17.5, -16)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 8, 0)
 
 [node name="Rope_16" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 18, 18)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 8, 0)
 
+; Arc chain routes (curved momentum paths)
 [node name="Rope_17" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 19, 22)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 12, -14)
 
 [node name="Rope_18" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 17, 15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 10, -7)
 
 [node name="Rope_19" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28, 18.5, -2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 9, -1)
 
 [node name="Rope_20" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 19, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 13, -12)
 
 [node name="Rope_21" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28, 18, -8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 11, -3)
 
 [node name="Rope_22" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 19.5, -2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 9, 5)
 
 [node name="Rope_23" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 18, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 11, 16)
 
 [node name="Rope_24" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 17.5, -3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 19)
 
 [node name="Rope_25" parent="Ropes" instance=ExtResource("4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 19, 10)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 9, 16)
+
+; ── Ziplines (grab anywhere, ring slides by momentum + gravity) ──────────────
+[node name="Ziplines" type="Node3D" parent="."]
+
+[node name="Zip_01" parent="Ziplines" instance=ExtResource("5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 14, -10)
+[node name="EndMarker" parent="Ziplines/Zip_01"]
+position = Vector3(26, 0, 2)
+
+[node name="Zip_02" parent="Ziplines" instance=ExtResource("5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 16, 5)
+[node name="EndMarker" parent="Ziplines/Zip_02"]
+position = Vector3(-15, -12, 8)
+
+[node name="Zip_03" parent="Ziplines" instance=ExtResource("5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 16, 4)
+[node name="EndMarker" parent="Ziplines/Zip_03"]
+position = Vector3(10, -8, 8)
+
+[node name="Zip_04" parent="Ziplines" instance=ExtResource("5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 15, -20)
+[node name="EndMarker" parent="Ziplines/Zip_04"]
+position = Vector3(0, -5, 20)
+
+[node name="Zip_05" parent="Ziplines" instance=ExtResource("5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 13, -6)
+[node name="EndMarker" parent="Ziplines/Zip_05"]
+position = Vector3(-6, -3, 22)
+
+[node name="Zip_06" parent="Ziplines" instance=ExtResource("5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 12, -18)
+[node name="EndMarker" parent="Ziplines/Zip_06"]
+position = Vector3(-2, 4, 28)
+
+[node name="Zip_07" parent="Ziplines" instance=ExtResource("5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 6, -2)
+[node name="EndMarker" parent="Ziplines/Zip_07"]
+position = Vector3(38, 1, 0)
+
+[node name="Zip_08" parent="Ziplines" instance=ExtResource("5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 11, 14)
+[node name="EndMarker" parent="Ziplines/Zip_08"]
+position = Vector3(-20, -2, 8)
+
+; ── Bounce traversal lanes (angled walls + gap-step routes) ─────────────────
+[node name="BounceCourse" type="Node3D" parent="."]
+
+[node name="Wall_A1" type="StaticBody3D" parent="BounceCourse"]
+position = Vector3(-20, 6, -2)
+rotation_degrees = Vector3(0, 32, 0)
+scale = Vector3(2.8, 4.2, 0.35)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/Wall_A1"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/Wall_A1"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Wall_A2" type="StaticBody3D" parent="BounceCourse"]
+position = Vector3(-11, 10, 4)
+rotation_degrees = Vector3(0, -24, 0)
+scale = Vector3(2.4, 3.9, 0.35)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/Wall_A2"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/Wall_A2"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Wall_A3" type="StaticBody3D" parent="BounceCourse"]
+position = Vector3(-1, 12, 10)
+rotation_degrees = Vector3(0, 35, 0)
+scale = Vector3(2.6, 3.8, 0.35)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/Wall_A3"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/Wall_A3"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Wall_B1" type="StaticBody3D" parent="BounceCourse"]
+position = Vector3(8, 7, -5)
+rotation_degrees = Vector3(0, -36, 0)
+scale = Vector3(3.0, 4.0, 0.35)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/Wall_B1"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/Wall_B1"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Wall_B2" type="StaticBody3D" parent="BounceCourse"]
+position = Vector3(18, 11, -12)
+rotation_degrees = Vector3(0, 18, 0)
+scale = Vector3(2.5, 3.6, 0.35)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/Wall_B2"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/Wall_B2"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Wall_B3" type="StaticBody3D" parent="BounceCourse"]
+position = Vector3(26, 14, -4)
+rotation_degrees = Vector3(0, -22, 0)
+scale = Vector3(2.4, 3.9, 0.35)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/Wall_B3"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/Wall_B3"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Wall_C1" type="StaticBody3D" parent="BounceCourse"]
+position = Vector3(-27, 7, 9)
+rotation_degrees = Vector3(0, 27, 0)
+scale = Vector3(2.8, 3.8, 0.35)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/Wall_C1"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/Wall_C1"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Wall_C2" type="StaticBody3D" parent="BounceCourse"]
+position = Vector3(-16, 11, 16)
+rotation_degrees = Vector3(0, -31, 0)
+scale = Vector3(2.6, 4.0, 0.35)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/Wall_C2"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/Wall_C2"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Wall_C3" type="StaticBody3D" parent="BounceCourse"]
+position = Vector3(-5, 14, 22)
+rotation_degrees = Vector3(0, 24, 0)
+scale = Vector3(2.4, 3.7, 0.35)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/Wall_C3"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/Wall_C3"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="KickWall_Left" type="StaticBody3D" parent="BounceCourse"]
+position = Vector3(-31, 6, -1)
+rotation_degrees = Vector3(0, 90, 0)
+scale = Vector3(6.0, 3.8, 0.35)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/KickWall_Left"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/KickWall_Left"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="KickWall_Right" type="StaticBody3D" parent="BounceCourse"]
+position = Vector3(31, 6, 1)
+rotation_degrees = Vector3(0, 90, 0)
+scale = Vector3(6.0, 3.8, 0.35)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/KickWall_Right"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/KickWall_Right"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="GapSteps" type="Node3D" parent="BounceCourse"]
+
+[node name="Step_01" type="StaticBody3D" parent="BounceCourse/GapSteps"]
+position = Vector3(-14, 8.2, -1)
+scale = Vector3(0.8, 0.7, 0.8)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/GapSteps/Step_01"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/GapSteps/Step_01"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Step_02" type="StaticBody3D" parent="BounceCourse/GapSteps"]
+position = Vector3(-7, 10.2, 3)
+scale = Vector3(0.75, 0.7, 0.75)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/GapSteps/Step_02"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/GapSteps/Step_02"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Step_03" type="StaticBody3D" parent="BounceCourse/GapSteps"]
+position = Vector3(0, 12.6, 7)
+scale = Vector3(0.72, 0.72, 0.72)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/GapSteps/Step_03"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/GapSteps/Step_03"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Step_04" type="StaticBody3D" parent="BounceCourse/GapSteps"]
+position = Vector3(7, 14.4, 11)
+scale = Vector3(0.68, 0.7, 0.68)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/GapSteps/Step_04"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/GapSteps/Step_04"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Step_05" type="StaticBody3D" parent="BounceCourse/GapSteps"]
+position = Vector3(14, 16.0, 14)
+scale = Vector3(0.65, 0.68, 0.65)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/GapSteps/Step_05"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/GapSteps/Step_05"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Step_06" type="StaticBody3D" parent="BounceCourse/GapSteps"]
+position = Vector3(22, 17.2, 17)
+scale = Vector3(0.62, 0.65, 0.62)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/GapSteps/Step_06"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/GapSteps/Step_06"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Step_07" type="StaticBody3D" parent="BounceCourse/GapSteps"]
+position = Vector3(27, 18.4, 12)
+scale = Vector3(0.6, 0.62, 0.6)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/GapSteps/Step_07"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/GapSteps/Step_07"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="Step_08" type="StaticBody3D" parent="BounceCourse/GapSteps"]
+position = Vector3(31, 19.2, 6)
+scale = Vector3(0.58, 0.6, 0.58)
+
+[node name="Mesh" type="MeshInstance3D" parent="BounceCourse/GapSteps/Step_08"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="Col" type="CollisionShape3D" parent="BounceCourse/GapSteps/Step_08"]
+shape = SubResource("BoxShape_Platform")
 
 ; ── Banana Spawner ──────────────────────────────────────────────────────────
 [node name="BananaSpawner" type="Node3D" parent="."]

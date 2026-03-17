@@ -1,20 +1,24 @@
 
-Flaws and bugs
+Flaws, bugs and recommendation
 
 
 Games:
-The bomb tag is bugged, first the bomb tagger has no idea if they are the bomb tagger.
-secondly where is the ESP outline to show where players are for bomb tagger and such, including regular tag.
-Make sure the transfer of the bomb works and that the player who dies goes into specatator mode.
-Finally make sure when 1 player is left we end the round.
-Where did banana frenzy go on the option? i know only 3 are supposed to show, but the same gamemode shouldnt show twice in a row on the options, to keep it fresh.
+[DONE] The bomb tag is bugged, first the bomb tagger has no idea if they are the bomb tagger.
+[DONE] secondly where is the ESP outline to show where players are for bomb tagger and such, including regular tag.
+[DONE] Make sure the transfer of the bomb works and that the player who dies goes into specatator mode.
+[DONE] Finally make sure when 1 player is left we end the round.
+[DONE] Where did banana frenzy go on the option? i know only 3 are supposed to show, but the same gamemode shouldnt show twice in a row on the options, to keep it fresh.
+[DONE] Dont allow 1 player lobbies.
+
 
 Map:
-I want canyon to focus alot more on bouncing off of things like walls and curved walls, so currently it has less vines whcih is good,
-but not much things the player can do to move around, add alot more things, maybe even those canyon gap holes.
+[DONE] I want canyon to focus alot more on bouncing off of things like walls and curved walls, so currently it has less vines whcih is good,
+[DONE] but not much things the player can do to move around, add alot more things, maybe even those canyon gap holes.
 
- everyone shouldn't  spawn on the same platform, spread them out, add spawners where a player can spawn, no two players or more can spawn on the same platform.
-Moon forest is a bit too dark, add moonlight.
+[DONE] everyone shouldn't  spawn on the same platform, spread them out, add spawners where a player can spawn, no two players or more can spawn on the same platform.
+[DONE] Moon forest is a bit too dark, add moonlight.
+[DONE] Moon forest needs a special mechanic, like canyon has the zipline but this one there are twigs sticking out of the trees, and if the user grabs them they start spnning around the twig, we need more though, including other revamps for other maps and how they woudl fucntion, have a conversation with me and ask questions like with the canyon.
+If you land on the edge of a platform, you have less range to push off of because the other side
 
 Buff:
 repulsion is useless for tag games, dont make it an option buff when selecting.
@@ -27,10 +31,14 @@ Gameplay:
 My friend complained that being on the ground sucks, he suggested a map with it being enclosed with all bouncing trampoline including the walls, not sure about other maps. In my opinion, i want being on the ground to be unpleasent, the point of the game is to stay off the ground.
 Have a cool camera animation circling the player who won in the  game before teleporting them back to the lobby.
 The leaderboard names arent showing, i told you not to use labels cause they follow the camera, if you can make it stop following the camera that would be nice, if not, use the viewport texture with cards ontop.
-For games like banana frenzy and last person standing, there is no
+For games like banana frenzy and last person standing, there is no sabotage from other players, previsouly it was the poo throwing but i believe that isnt good anymore. we can have a discussion abotu this when we reach to it.
 
 Multiplayer:
 Lobby terminating and creation is still very bugged, i can leave, join back and leave, and it will show as if theres 2 players in the game.
 I played with my friends and it said 8/8 and he couldnt join when it was actually 4/8. The room code for me (the host) also was different from all of my friends.
 The order of players in the lobby is also weird.
 
+
+Sugessted changes, discussion needed and questions:
+Have an option to be either in spectator mode or ghost mode when you die, where nobody can see you or interact with you but you can see them but cant interact with them, and you are semi transprent, no colors.
+Instead of maps changing every round, a round is 3 gaemodes with 3 buffs in 1 map. selection of the gamemodes pop up at screen via gui, unlocking the mouse.

@@ -204,12 +204,32 @@ const _CAT_LABELS : Array[String] = ["GAMEMODE", "MAP", "BUFF"]
 
 
 func _randomise_offerings() -> void:
-	# Gamemode: shuffle available gamemodes, fill 3 slots (wrapping if fewer than 3).
+	# Gamemode freshness: with 4 total modes and 3 shown, rotate which one is excluded.
 	var gm_pool : Array[String] = ALL_GAMEMODES.duplicate()
-	gm_pool.shuffle()
 	offered_gamemodes = []
-	for i : int in 3:
-		offered_gamemodes.append(gm_pool[i % gm_pool.size()])
+	if gm_pool.size() <= 3:
+		gm_pool.shuffle()
+		for gm : String in gm_pool:
+			offered_gamemodes.append(gm)
+	else:
+		var gs : Node = get_node_or_null("/root/GameSettings")
+		var last_excluded := ""
+		if gs != null and "last_excluded_gamemode" in gs:
+			last_excluded = str(gs.last_excluded_gamemode)
+
+		var excluded_candidates : Array[String] = gm_pool.duplicate()
+		if last_excluded != "" and excluded_candidates.has(last_excluded) and excluded_candidates.size() > 1:
+			excluded_candidates.erase(last_excluded)
+		excluded_candidates.shuffle()
+		var excluded : String = excluded_candidates[0]
+
+		for gm : String in gm_pool:
+			if gm != excluded:
+				offered_gamemodes.append(gm)
+		offered_gamemodes.shuffle()
+
+		if gs != null and "last_excluded_gamemode" in gs:
+			gs.last_excluded_gamemode = excluded
 
 	var map_names : Array[String] = []
 	for k : String in ALL_MAPS.keys():

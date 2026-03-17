@@ -19,6 +19,7 @@ var _chat : Node = null
 
 func _ready() -> void:
 	_apply_settings()
+	_apply_map_vine_style()
 
 	# Create a dedicated container for players.
 	_players_node = Node3D.new()
@@ -31,6 +32,18 @@ func _ready() -> void:
 	else:
 		# Singleplayer fallback.
 		_spawn_local_player()
+
+
+func _apply_map_vine_style() -> void:
+	# Forest maps keep the default jungle-green vines.
+	if scene_file_path.find("RedCanyon.tscn") == -1:
+		return
+
+	var rope_color := Color(0.48, 0.30, 0.10)
+	for n in find_children("*", "Vine", true, false):
+		var vine := n as Vine
+		if vine:
+			vine.segment_color = rope_color
 
 
 func _apply_settings() -> void:
@@ -75,6 +88,13 @@ func _setup_multiplayer() -> void:
 	# Spawn for every peer already in the lobby.
 	for peer_id : int in GameLobby.players.keys():
 		_spawn_mp_player(peer_id)
+
+	# Fallback: on fast scene transitions, clients can enter the map before
+	# GameLobby.players has finished syncing. Ensure the local player exists.
+	var local_id : int = multiplayer.get_unique_id()
+	if not _spawned_peers.has(local_id):
+		_spawn_mp_player(local_id)
+
 	# Late-joiners (shouldn't happen mid-game, but safe).
 	GameLobby.player_joined.connect(func(_id : int, _n : String) -> void: _spawn_mp_player(_id))
 	GameLobby.player_left.connect(_on_peer_left)

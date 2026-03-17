@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://twig_spin_component"]
+
+[ext_resource type="Script" path="res://components/twig_spin.gd" id="1_twig"]
+
+[node name="TwigSpin" type="Node3D"]
+script = ExtResource("1_twig")

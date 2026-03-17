@@ -47,6 +47,8 @@ var active_buff : String = ""
 var _using_eos : bool = false
 var _current_lobby_public : bool = true
 var _disconnect_in_progress : bool = false
+## Locally hidden lobby IDs (typically stale listings after host leaves).
+var _hidden_public_lobbies : Dictionary = {}
 
 ## Reference to the HLobbies autoload node (set lazily).
 var _hlobbies : Node = null
@@ -127,6 +129,8 @@ func list_public_lobbies() -> Array[Dictionary]:
 			continue
 		if str(lb.lobby_id) == "" or str(lb.owner_product_user_id) == "":
 			continue
+		if _hidden_public_lobbies.has(str(lb.lobby_id)):
+			continue
 		if int(lb.members.size()) <= 0:
 			continue
 		# Strict rule: only advertised lobbies are listed.
@@ -181,6 +185,11 @@ func disconnect_lobby_async() -> void:
 	if is_host() and multiplayer.has_multiplayer_peer():
 		rpc("_rpc_host_disbanding")
 		await get_tree().create_timer(0.12).timeout
+
+	# If we were the host, hide this lobby locally from public browse results.
+	# EOS can briefly show stale listings after destroy/leave due eventual consistency.
+	if is_host() and current_lobby_id != "":
+		_hidden_public_lobbies[current_lobby_id] = true
 
 	# Leave / destroy the EOS lobby if active.
 	if _using_eos and _hlobby != null:
@@ -284,6 +293,8 @@ func _host_lobby_eos(public_lobby: bool = true) -> Error:
 	_using_eos = true
 	_current_lobby_public = public_lobby
 	current_short_code = ""
+	# New host session should always be visible in browser (if public).
+	_hidden_public_lobbies.erase(current_lobby_id)
 
 	# Metadata used by lobby finder and short-code joining.
 	_hlobby.add_attribute("host_name", get_local_name(), EOS.Lobby.LobbyAttributeVisibility.Public)
@@ -320,6 +331,8 @@ func _join_lobby_eos(lobby_id: String) -> Error:
 	if query == "":
 		connection_failed.emit()
 		return ERR_INVALID_PARAMETER
+	# If the user explicitly joins by ID, don't keep it hidden locally.
+	_hidden_public_lobbies.erase(query)
 
 	# Join by full EOS lobby ID.
 	var results = await hlobbies.search_by_lobby_id_async(query)
@@ -510,6 +523,9 @@ func _rpc_system_msg(text: String) -> void:
 func start_game() -> void:
 	if not is_host():
 		return
+	if players.size() < 2:
+		send_system_message("Need at least 2 players to start.")
+		return
 	rpc("_rpc_start_game")
 	_rpc_start_game()
 
@@ -529,6 +545,7 @@ func _register_self() -> void:
 	players[my_id] = { "name": my_name }
 	player_joined.emit(my_id, my_name)
 	if is_host():
+		_prune_stale_players_host()
 		_broadcast_player_snapshot()
 
 
@@ -568,6 +585,26 @@ func _on_server_disconnected() -> void:
 
 
 func _on_peer_connected(id: int) -> void:
+	if is_host():
+		_prune_stale_players_host()
+		if _using_eos and peer is EOSGMultiplayerPeer:
+			# If the same EOS account reconnects with a new peer id, drop stale entries
+			# so lobby size and slots remain accurate.
+			var new_puid := str((peer as EOSGMultiplayerPeer).get_peer_user_id(id))
+			if new_puid != "":
+				var stale_pids : Array[int] = []
+				for existing_id : int in players.keys():
+					if existing_id == id or existing_id == multiplayer.get_unique_id():
+						continue
+					var existing_puid := str((peer as EOSGMultiplayerPeer).get_peer_user_id(existing_id))
+					if existing_puid != "" and existing_puid == new_puid:
+						stale_pids.append(existing_id)
+				for stale_id in stale_pids:
+					players.erase(stale_id)
+					player_left.emit(stale_id)
+				if not stale_pids.is_empty():
+					_broadcast_player_snapshot()
+
 	# Reject banned peers immediately.
 	if id in banned_ids:
 		rpc_id(id, "_rpc_notify_kicked", true)
@@ -587,6 +624,8 @@ func _on_peer_connected(id: int) -> void:
 	# populate their lobby view completely (not just the host).
 	for existing_id : int in players.keys():
 		rpc_id(id, "_rpc_register_player", existing_id, players[existing_id]["name"])
+	# Keep room-code/lobby-id authoritative from host so everyone sees the same value.
+	rpc_id(id, "_rpc_sync_lobby_identity", current_lobby_id, current_short_code)
 	# Also sync current match state so late-joiners can route directly into a live game.
 	rpc_id(id, "_rpc_set_match_state", match_in_progress, active_map_path, active_gamemode, active_buff)
 
@@ -598,6 +637,7 @@ func _on_peer_disconnected(id: int) -> void:
 	player_left.emit(id)
 	# Host broadcasts the leave message.
 	if is_host():
+		_prune_stale_players_host()
 		send_system_message("%s left the game." % p_name)
 		_broadcast_player_snapshot()
 
@@ -651,11 +691,30 @@ func _rpc_set_your_name(assigned_name: String) -> void:
 func _broadcast_player_snapshot() -> void:
 	if not is_host() or not multiplayer.has_multiplayer_peer():
 		return
+	_prune_stale_players_host()
 	var snapshot : Dictionary = {}
 	for pid : int in players.keys():
 		snapshot[pid] = str(players[pid]["name"])
 	rpc("_rpc_sync_players", snapshot)
 	_rpc_sync_players(snapshot)
+	rpc("_rpc_sync_lobby_identity", current_lobby_id, current_short_code)
+	_rpc_sync_lobby_identity(current_lobby_id, current_short_code)
+
+
+func _prune_stale_players_host() -> void:
+	if not is_host() or not multiplayer.has_multiplayer_peer():
+		return
+	var active_ids : Dictionary = {}
+	active_ids[multiplayer.get_unique_id()] = true
+	for pid : int in multiplayer.get_peers():
+		active_ids[pid] = true
+	var stale_ids : Array[int] = []
+	for pid : int in players.keys():
+		if not active_ids.has(pid):
+			stale_ids.append(pid)
+	for stale_id in stale_ids:
+		players.erase(stale_id)
+		player_left.emit(stale_id)
 
 
 @rpc("authority", "reliable", "call_remote")
@@ -701,6 +760,12 @@ func _generate_short_code(length: int = 6) -> String:
 	for i in length:
 		out += ALPHABET[rng.randi_range(0, ALPHABET.length() - 1)]
 	return out
+
+
+@rpc("authority", "reliable", "call_remote")
+func _rpc_sync_lobby_identity(lobby_id: String, short_code: String) -> void:
+	current_lobby_id = lobby_id
+	current_short_code = short_code
 
 
 func begin_match(map_path: String, gamemode: String, buff: String) -> void:

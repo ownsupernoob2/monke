@@ -124,6 +124,22 @@ var _right_rope_len : float   = 0.0
 var _left_vine  : Vine = null
 var _right_vine : Vine = null
 
+## Zipline slide state – one set per hand.
+var _left_zipline  : Node = null
+var _right_zipline : Node = null
+var _left_zip_t    : float   = 0.0   ## ring position in metres from cable start
+var _right_zip_t   : float   = 0.0
+var _left_zip_vel  : float   = 0.0   ## ring velocity along cable (m/s)
+var _right_zip_vel : float   = 0.0
+
+## Twig-spin state – one set per hand.
+var _left_twig       : Node = null
+var _right_twig      : Node = null
+var _left_twig_angle : float = 0.0
+var _right_twig_angle : float = 0.0
+var _left_twig_avel  : float = 0.0
+var _right_twig_avel : float = 0.0
+
 ## Extra FOV degrees injected on a timed release; decays to 0 each frame.
 var _fov_pulse : float = 0.0
 var _active_buff : String = ""
@@ -322,7 +338,8 @@ func _input(event: InputEvent) -> void:
 		torso.visible = _shift_lock
 		if _buff_outline and is_instance_valid(_buff_outline):
 			_buff_outline.visible = _shift_lock
-		get_viewport().set_input_as_handled()
+		if is_inside_tree():
+			get_viewport().set_input_as_handled()
 		return
 
 	# ── Mouse look ────────────────────────────────────────────────────────────
@@ -465,6 +482,9 @@ func _physics_process(delta: float) -> void:
 			if _tan.length_squared() > 0.001:
 				velocity += _tan.normalized() * swing_steer_force * delta
 
+		# Advance zipline ring positions before applying rope constraints.
+		_update_zipline_pivots(delta)
+
 		# ── Stage 1 · Pre-move velocity projection ────────────────────────────
 		# Remove the outward-radial velocity component BEFORE move_and_slide.
 		# This is the kinematic equivalent of rope-tension force: gravity's
@@ -550,7 +570,8 @@ func _process(delta: float) -> void:
 	var targeting := false
 	if vine_ray.is_colliding():
 		for i in vine_ray.get_collision_count():
-			if vine_ray.get_collider(i) is VineLink:
+			var _tgt := vine_ray.get_collider(i)
+			if _tgt is VineLink or (_tgt and (_tgt.has_meta("zipline") or _tgt.has_meta("twig_spin"))):
 				targeting = true
 				break
 	if hud:
@@ -600,39 +621,49 @@ func _tick_cooldowns(delta: float) -> void:
 			_player_push_cooldowns.erase(key)
 
 
-## Vine-grab input – runs every physics frame, even while swinging one hand,
-## so the player can lunge for a second vine Tarzan-style mid-swing.
-## Grab takes absolute priority; if both LMB and RMB are pressed the same frame
-## they both grab the same vine (two-hand hang).
+## Vine / zipline grab – runs every physics frame, even while swinging one hand,
+## so the player can lunge Tarzan-style mid-swing.  VineLinks take priority;
+## zipline grab bodies are used only when no VineLink is in range.
 func _check_vine_grab() -> void:
 	if not vine_ray.is_colliding():
 		return
-	# ShapeCast3D may hit walls (layer 1) before the vine (layer 2).
-	# Walk all hits and take the first VineLink found.
+	# Walk all hits: VineLink (layer 2) takes priority, then twig-spin/zipline.
 	var link      : VineLink = null
+	var twig      : Node = null
+	var zip       : Node = null
 	var hit_point : Vector3  = Vector3.ZERO
 	for i in vine_ray.get_collision_count():
-		var c := vine_ray.get_collider(i) as VineLink
-		if c:
-			link      = c
+		var c := vine_ray.get_collider(i)
+		if c is VineLink:
+			link      = c as VineLink
 			hit_point = vine_ray.get_collision_point(i)
-			break
-	if not link:
-		return
-	var vine   : Vine    = link.root_vine
-	# Physics pivot = fixed top anchor (verlet node 0, never moves).
-	# Visual hit    = exact surface point the shape struck on the chain.
-	var anchor : Vector3 = vine.grab_point.global_position
-	# Grab on click OR auto-attach while holding the button (ease of use).
+		elif c and c.has_meta("twig_spin") and twig == null:
+			twig      = c.get_meta("twig_spin") as Node
+			hit_point = vine_ray.get_collision_point(i)
+		elif c and c.has_meta("zipline") and zip == null:
+			zip       = c.get_meta("zipline") as Node
+			hit_point = vine_ray.get_collision_point(i)
 	var left_want  := (Input.is_action_just_pressed("push_left") or Input.is_action_pressed("push_left")) \
 			and left_hand_state == HandState.FREE and not _left_consumed
 	var right_want := (Input.is_action_just_pressed("push_right") or Input.is_action_pressed("push_right")) \
 			and right_hand_state == HandState.FREE and not _right_consumed
-	if left_want:
-		_grab_vine(vine, true, anchor, hit_point)
-	if right_want:
-		_grab_vine(vine, false, anchor, hit_point)
-
+	if link:
+		var vine   : Vine    = link.root_vine
+		var anchor : Vector3 = vine.grab_point.global_position
+		if left_want:
+			_grab_vine(vine, true, anchor, hit_point)
+		if right_want:
+			_grab_vine(vine, false, anchor, hit_point)
+	elif twig:
+		if left_want:
+			_grab_twig(twig, true, hit_point)
+		if right_want:
+			_grab_twig(twig, false, hit_point)
+	elif zip:
+		if left_want:
+			_grab_zipline(zip, true, hit_point)
+		if right_want:
+			_grab_zipline(zip, false, hit_point)
 
 ## Push input – only reached when both hands are FREE (not grabbing a vine).
 ## Averages valid push directions and scales force by hand count (1 or 2 hands).
@@ -745,6 +776,75 @@ func _grab_vine(vine: Vine, is_left: bool, anchor: Vector3, hit_point: Vector3) 
 
 
 ## Detach a hand from its vine.
+## Attach a hand to a zipline cable at the given world hit point.
+## The ring slides freely along the cable; gravity accelerates it downhill.
+func _grab_zipline(zip: Node, is_left: bool, hit_point: Vector3) -> void:
+	var t        : float = float(zip.call("project_point", hit_point))
+	var pivot    : Vector3 = zip.call("slide_pos", t)
+	var rope_len : float = maxf((global_position - pivot).length(), 0.5)
+	# Seed ring velocity from the player's current along-cable speed.
+	var zip_dir  : Vector3 = zip.get("direction")
+	var zip_vel  : float = velocity.dot(zip_dir)
+	if is_left:
+		left_hand_state  = HandState.GRABBING
+		left_grab_point  = null
+		_left_pivot      = pivot
+		_left_rope_len   = rope_len
+		_left_vine       = null
+		_left_zipline    = zip
+		_left_zip_t      = t
+		_left_zip_vel    = zip_vel
+		_left_grab_idx   = -1
+		left_hand.grab(hit_point, right_hand_state == HandState.GRABBING)
+	else:
+		right_hand_state = HandState.GRABBING
+		right_grab_point = null
+		_right_pivot     = pivot
+		_right_rope_len  = rope_len
+		_right_vine      = null
+		_right_zipline   = zip
+		_right_zip_t     = t
+		_right_zip_vel   = zip_vel
+		_right_grab_idx  = -1
+		right_hand.grab(hit_point, left_hand_state == HandState.GRABBING)
+
+
+## Attach a hand to a twig-spin pivot ring at the given hit point.
+## Player orbits around the twig center; angular velocity decays over time.
+func _grab_twig(twig: Node, is_left: bool, hit_point: Vector3) -> void:
+	var theta := float(twig.call("project_angle", hit_point))
+	var pivot : Vector3 = twig.call("orbit_pos", theta)
+	var rope_len : float = maxf((global_position - pivot).length(), 0.5)
+	var radius : float = maxf(float(twig.get("orbit_radius")), 0.1)
+	var tan_dir : Vector3 = twig.call("tangent_dir", theta)
+	var ang_vel : float = velocity.dot(tan_dir) / radius
+	if is_left:
+		left_hand_state    = HandState.GRABBING
+		left_grab_point    = null
+		_left_pivot        = pivot
+		_left_rope_len     = rope_len
+		_left_vine         = null
+		_left_zipline      = null
+		_left_twig         = twig
+		_left_twig_angle   = theta
+		_left_twig_avel    = ang_vel
+		_left_grab_idx     = -1
+		left_hand.grab(pivot, right_hand_state == HandState.GRABBING)
+	else:
+		right_hand_state   = HandState.GRABBING
+		right_grab_point   = null
+		_right_pivot       = pivot
+		_right_rope_len    = rope_len
+		_right_vine        = null
+		_right_zipline     = null
+		_right_twig        = twig
+		_right_twig_angle  = theta
+		_right_twig_avel   = ang_vel
+		_right_grab_idx    = -1
+		right_hand.grab(pivot, left_hand_state == HandState.GRABBING)
+
+
+## Detach a hand from its vine.
 func _release_hand(is_left: bool) -> void:
 	# ── Release boost ──────────────────────────────────────────────────────
 	# Fires only when the LAST hand releases (the true launch moment).
@@ -752,7 +852,33 @@ func _release_hand(is_left: bool) -> void:
 	# players regain control immediately. Combo increases that guaranteed speed.
 	var other_grabbing := (right_hand_state == HandState.GRABBING) if is_left \
 						else (left_hand_state  == HandState.GRABBING)
-	if not other_grabbing:
+	var released_dynamic := (_left_zipline != null or _left_twig != null) if is_left else (_right_zipline != null or _right_twig != null)
+	if not other_grabbing and released_dynamic:
+		var carry := Vector3.ZERO
+		if is_left:
+			if _left_zipline:
+				var l_dir : Vector3 = _left_zipline.get("direction")
+				# Zipline keeps its legacy punch on release.
+				carry = l_dir * (_left_zip_vel * release_boost_mult)
+			elif _left_twig:
+				var l_tan : Vector3 = _left_twig.call("tangent_dir", _left_twig_angle)
+				var l_radius := maxf(float(_left_twig.get("orbit_radius")), 0.1)
+				carry = l_tan * (_left_twig_avel * l_radius)
+		else:
+			if _right_zipline:
+				var r_dir : Vector3 = _right_zipline.get("direction")
+				# Zipline keeps its legacy punch on release.
+				carry = r_dir * (_right_zip_vel * release_boost_mult)
+			elif _right_twig:
+				var r_tan : Vector3 = _right_twig.call("tangent_dir", _right_twig_angle)
+				var r_radius := maxf(float(_right_twig.get("orbit_radius")), 0.1)
+				carry = r_tan * (_right_twig_avel * r_radius)
+		velocity += carry
+		_fov_pulse = clampf(carry.length() * 1.8, 0.0, 18.0)
+		if _combo_hold_timer > combo_hold_limit:
+			_combo = 0
+			combo_changed.emit(_combo)
+	elif not other_grabbing and not released_dynamic:
 		# Base launch speed is always guaranteed, independent of prior velocity.
 		# Combo unlocks additional speed above that base.
 		var look_dir := (-head.global_transform.basis.z).normalized()
@@ -770,6 +896,12 @@ func _release_hand(is_left: bool) -> void:
 		if _left_vine:
 			_left_vine.clear_grab()
 			_left_vine = null
+		_left_zipline  = null
+		_left_zip_t    = 0.0
+		_left_zip_vel  = 0.0
+		_left_twig       = null
+		_left_twig_angle = 0.0
+		_left_twig_avel  = 0.0
 		left_hand.release()
 	else:
 		right_hand_state = HandState.FREE
@@ -778,12 +910,89 @@ func _release_hand(is_left: bool) -> void:
 		if _right_vine:
 			_right_vine.clear_grab()
 			_right_vine = null
+		_right_zipline = null
+		_right_zip_t   = 0.0
+		_right_zip_vel = 0.0
+		_right_twig       = null
+		_right_twig_angle = 0.0
+		_right_twig_avel  = 0.0
 		right_hand.release()
 
 
 ## True when at least one hand is holding a vine.
 func _is_grabbing() -> bool:
 	return left_hand_state == HandState.GRABBING or right_hand_state == HandState.GRABBING
+
+
+## Stage 1 — Pre-move velocity projection.
+## Advance each zipline ring along its cable for this physics frame.
+## Gravity accelerates the ring toward the lower anchor (downhill = fast,
+## uphill = slow). The ring's world position becomes _left/_right_pivot so
+## the existing rope constraints (_project_swing_velocity / _correct_rope_length)
+## work without modification — the player simply hangs from a moving pivot.
+func _update_zipline_pivots(delta: float) -> void:
+	if _left_zipline and left_hand_state == HandState.GRABBING:
+		var l_dir : Vector3 = _left_zipline.get("direction")
+		var l_len : float = float(_left_zipline.get("length"))
+		var g_along := Vector3(0.0, -GRAVITY, 0.0).dot(l_dir)
+		_left_zip_vel += g_along * delta
+		_left_zip_t   += _left_zip_vel * delta
+		_left_zip_t    = clampf(_left_zip_t, 0.0, l_len)
+		if _left_zip_t <= 0.0 and _left_zip_vel < 0.0:
+			_left_zip_vel = 0.0
+		if _left_zip_t >= l_len and _left_zip_vel > 0.0:
+			_left_zip_vel = 0.0
+		_left_pivot = _left_zipline.call("slide_pos", _left_zip_t)
+		left_hand.update_grab_pos(_left_pivot)
+	if _left_twig and left_hand_state == HandState.GRABBING:
+		var look := -head.global_transform.basis.z
+		look.y = 0.0
+		if look.length_squared() > 0.001:
+			look = look.normalized()
+			var l_tan : Vector3 = _left_twig.call("tangent_dir", _left_twig_angle)
+			var desired_sign := signf(l_tan.dot(look))
+			if desired_sign != 0.0:
+				_left_twig_avel += desired_sign * float(_left_twig.get("steer_accel")) * delta
+		if right_hand_state == HandState.FREE and Input.is_action_just_pressed("push_right"):
+			var pump_sign := signf(_left_twig_avel)
+			if pump_sign == 0.0:
+				pump_sign = 1.0
+			_left_twig_avel += pump_sign * float(_left_twig.get("pump_impulse"))
+		_left_twig_avel *= pow(float(_left_twig.get("angular_damping")), delta * 60.0)
+		_left_twig_angle += _left_twig_avel * delta
+		_left_pivot = _left_twig.call("orbit_pos", _left_twig_angle)
+		left_hand.update_grab_pos(_left_pivot)
+	if _right_zipline and right_hand_state == HandState.GRABBING:
+		var r_dir : Vector3 = _right_zipline.get("direction")
+		var r_len : float = float(_right_zipline.get("length"))
+		var g_along := Vector3(0.0, -GRAVITY, 0.0).dot(r_dir)
+		_right_zip_vel += g_along * delta
+		_right_zip_t   += _right_zip_vel * delta
+		_right_zip_t    = clampf(_right_zip_t, 0.0, r_len)
+		if _right_zip_t <= 0.0 and _right_zip_vel < 0.0:
+			_right_zip_vel = 0.0
+		if _right_zip_t >= r_len and _right_zip_vel > 0.0:
+			_right_zip_vel = 0.0
+		_right_pivot = _right_zipline.call("slide_pos", _right_zip_t)
+		right_hand.update_grab_pos(_right_pivot)
+	if _right_twig and right_hand_state == HandState.GRABBING:
+		var look_r := -head.global_transform.basis.z
+		look_r.y = 0.0
+		if look_r.length_squared() > 0.001:
+			look_r = look_r.normalized()
+			var r_tan : Vector3 = _right_twig.call("tangent_dir", _right_twig_angle)
+			var desired_sign_r := signf(r_tan.dot(look_r))
+			if desired_sign_r != 0.0:
+				_right_twig_avel += desired_sign_r * float(_right_twig.get("steer_accel")) * delta
+		if left_hand_state == HandState.FREE and Input.is_action_just_pressed("push_left"):
+			var pump_sign_r := signf(_right_twig_avel)
+			if pump_sign_r == 0.0:
+				pump_sign_r = 1.0
+			_right_twig_avel += pump_sign_r * float(_right_twig.get("pump_impulse"))
+		_right_twig_avel *= pow(float(_right_twig.get("angular_damping")), delta * 60.0)
+		_right_twig_angle += _right_twig_avel * delta
+		_right_pivot = _right_twig.call("orbit_pos", _right_twig_angle)
+		right_hand.update_grab_pos(_right_pivot)
 
 
 ## Stage 1 — Pre-move velocity projection.

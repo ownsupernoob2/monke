@@ -12,6 +12,11 @@ const GRAVITY     : float = 9.8
 @export var chain_damping : float = 0.985  ## Verlet velocity retention (0-1).
 @export var chain_iters   : int   = 8      ## Gauss-Seidel iterations per frame.
 @export var idle_sway     : float = 1.5    ## Idle sway speed (m/s), scaled by delta.
+@export var segment_color : Color = Color(0.18, 0.38, 0.07):
+	set(value):
+		segment_color = value
+		if _mat:
+			_mat.albedo_color = value
 
 ## Fixed anchor at the very top of the vine (ceiling attachment).
 @onready var grab_point : Marker3D = $GrabPoint
@@ -92,7 +97,7 @@ func _build_links() -> void:
 ## Spawns LINK_COUNT-1 CylinderMesh segments connecting adjacent chain nodes.
 func _build_segments() -> void:
 	_mat              = StandardMaterial3D.new()
-	_mat.albedo_color = Color(0.18, 0.38, 0.07)
+	_mat.albedo_color = segment_color
 	for i in LINK_COUNT - 1:
 		var t0   := float(i)     / (LINK_COUNT - 1)
 		var t1   := float(i + 1) / (LINK_COUNT - 1)
