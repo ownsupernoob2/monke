@@ -185,7 +185,7 @@ func _assign_spawn_slot(peer_id: int, slot_count: int) -> int:
 
 	# More players than available platforms: use fallback ring slots.
 	if slot_count > 0:
-		var overflow_slot := slot_count + max(0, deterministic_index - slot_count)
+		var overflow_slot : int = slot_count + maxi(0, deterministic_index - slot_count)
 		_peer_spawn_slot[peer_id] = overflow_slot
 		return overflow_slot
 
