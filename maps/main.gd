@@ -128,7 +128,7 @@ func _spawn_mp_player(peer_id : int) -> void:
 	# Place each player on a different platform (if available).
 	var platforms := _get_platform_positions()
 	var slot : int = _assign_spawn_slot(peer_id, platforms.size())
-	if platforms.size() > 0 and slot >= 0:
+	if slot >= 0 and slot < platforms.size():
 		player.global_position = platforms[slot] + Vector3(0, 2, 0)
 	else:
 		# Fallback ring placement keeps players separated even without platforms.
@@ -136,6 +136,9 @@ func _spawn_mp_player(peer_id : int) -> void:
 		var angle := float(slot) * 0.9
 		var offset := Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
 		player.global_position = spawn_point.global_position + offset
+
+	# Ensure players never physically collide with each other.
+	_refresh_player_collision_exceptions()
 
 	# Wire death signal.
 	player.player_died.connect(_on_player_died.bind(peer_id))
@@ -172,20 +175,51 @@ func _on_peer_left(peer_id : int) -> void:
 func _assign_spawn_slot(peer_id: int, slot_count: int) -> int:
 	if _peer_spawn_slot.has(peer_id):
 		return int(_peer_spawn_slot[peer_id])
+
+	# Deterministic ordering keeps peer -> spawn mapping stable across clients.
+	var deterministic_index := _sorted_peer_index(peer_id)
+	if slot_count > 0 and deterministic_index < slot_count:
+		_peer_spawn_slot[peer_id] = deterministic_index
+		_used_spawn_slots[deterministic_index] = true
+		return deterministic_index
+
+	# More players than available platforms: use fallback ring slots.
 	if slot_count > 0:
-		for i in slot_count:
-			if not _used_spawn_slots.has(i):
-				_peer_spawn_slot[peer_id] = i
-				_used_spawn_slots[i] = true
-				return i
-		# More players than slots: recycle in a stable way.
-		var recycled : int = peer_id % slot_count
-		_peer_spawn_slot[peer_id] = recycled
-		return recycled
+		var overflow_slot := slot_count + max(0, deterministic_index - slot_count)
+		_peer_spawn_slot[peer_id] = overflow_slot
+		return overflow_slot
+
 	# No platforms case: still assign a unique synthetic slot index.
-	var fallback_slot : int = _peer_spawn_slot.size()
+	var fallback_slot : int = deterministic_index
 	_peer_spawn_slot[peer_id] = fallback_slot
 	return fallback_slot
+
+
+func _sorted_peer_index(peer_id: int) -> int:
+	var ids: Array[int] = []
+	for id_variant in GameLobby.players.keys():
+		ids.append(int(id_variant))
+	if not ids.has(peer_id):
+		ids.append(peer_id)
+	ids.sort()
+	var index := ids.find(peer_id)
+	if index == -1:
+		return 0
+	return index
+
+
+func _refresh_player_collision_exceptions() -> void:
+	var nodes := _players_node.get_children()
+	for i in range(nodes.size()):
+		var player_a := nodes[i] as PhysicsBody3D
+		if player_a == null:
+			continue
+		for j in range(i + 1, nodes.size()):
+			var player_b := nodes[j] as PhysicsBody3D
+			if player_b == null:
+				continue
+			player_a.add_collision_exception_with(player_b)
+			player_b.add_collision_exception_with(player_a)
 
 
 ## Collect world positions of all platforms in the map's Platforms node.
