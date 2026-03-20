@@ -234,11 +234,12 @@ func _get_platform_positions() -> Array[Vector3]:
 
 
 func _on_server_closed() -> void:
-	# Chat handles the "host left" message and scene switch.
-	# If there's no chat (shouldn't happen), do it here as fallback.
-	if not _chat:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		get_tree().change_scene_to_file("res://multiplayer/ConnectScreen.tscn")
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		if gs.disconnect_message.is_empty():
+			gs.disconnect_message = "Host left the lobby."
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
 
 
 func _on_player_died(peer_id : int) -> void:

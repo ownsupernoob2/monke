@@ -82,7 +82,7 @@ func join_async(lobby: HLobby):
 	_log.debug("Joining lobby...")
 
 	var opts = EOS.Lobby.JoinLobbyOptions.new()
-	opts.lobby_details = lobby._lobby_details
+	opts.lobby_details = lobby.get_lobby_details()
 	opts.presence_enabled = presence_enabled
 	opts.local_rtc_options = local_rtc_options
 	EOS.Lobby.LobbyInterface.join_lobby(opts)
@@ -106,7 +106,7 @@ func search_by_product_user_id_async(product_user_id: String):
 	var opts = EOS.Lobby.CreateLobbySearchOptions.new()
 	opts.max_results = max_search_results
 	
-	var search: EOSGLobbySearch = create_search(opts)
+	var search = create_search(opts)
 	if not search:
 		return null
 	
@@ -131,7 +131,7 @@ func search_by_attribute_async(attributes):
 	var opts = EOS.Lobby.CreateLobbySearchOptions.new()
 	opts.max_results = max_search_results
 	
-	var search: EOSGLobbySearch = create_search(opts)
+	var search = create_search(opts)
 	if not search:
 		return null
 	
@@ -151,7 +151,7 @@ func search_by_lobby_id_async(lobby_id: String):
 	var opts = EOS.Lobby.CreateLobbySearchOptions.new()
 	opts.max_results = max_search_results
 	
-	var search: EOSGLobbySearch = create_search(opts)
+	var search = create_search(opts)
 	if not search:
 		return null
 	
@@ -171,7 +171,7 @@ func search_by_bucket_id_async(bucket_id: String):
 	})
 
 
-## (Advanced) Create a new lobby search. Returns [EOSGLobbySearch] or null. Use [search_async] to perform the search.
+## (Advanced) Create a new lobby search. Returns a lobby search object or null. Use [search_async] to perform the search.
 func create_search(opts: EOS.Lobby.CreateLobbySearchOptions):
 	_log.debug("Creating lobby search...")
 	
@@ -184,7 +184,7 @@ func create_search(opts: EOS.Lobby.CreateLobbySearchOptions):
 
 
 ## (Advanced) Perform the lobby search. Returns [Array] of [HLobby] or null
-func search_async(lobby_search: EOSGLobbySearch):
+func search_async(lobby_search):
 	_log.debug("Searching for lobbies...")
 
 	lobby_search.find(HAuth.product_user_id)
@@ -206,7 +206,7 @@ func search_async(lobby_search: EOSGLobbySearch):
 	
 		var lobby = HLobby.new()
 		var details = copy_ret.lobby_details
-		lobby._init_from_details(details)
+		lobby.init_from_details(details)
 		lobbies.append(lobby)
 	
 	return lobbies

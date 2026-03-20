@@ -33,6 +33,10 @@ var _dot_count        : int     = 0
 var _loading_active   : bool    = false
 var _join_connected_fired : bool = false
 var _scene_transitioning  : bool = false
+var _host_request_done : bool = false
+var _host_request_err : int = ERR_BUSY
+var _join_request_done : bool = false
+var _join_request_err : int = ERR_BUSY
 
 
 func _resolve_create_paths() -> void:
@@ -137,6 +141,13 @@ func _ready() -> void:
 
 
 func _update_ui_for_mode() -> void:
+	if _using_webrtc_transport():
+		status_label.text = "WebRTC mode: enter a room code (requires webrtc_signal_url)."
+		address_row.visible = false
+		refresh_btn.visible = false
+		lobby_list.visible = false
+		return
+
 	var eos_mode : bool = _eos_available()
 	address_row.visible = not eos_mode
 	refresh_btn.visible = eos_mode
@@ -244,6 +255,30 @@ func _save_name() -> bool:
 	return true
 
 
+func _begin_host_request(is_public: bool) -> void:
+	_host_request_done = false
+	_host_request_err = ERR_BUSY
+	_host_request_err = await lobby.host_lobby(7777, is_public)
+	_host_request_done = true
+
+
+func _begin_join_request(target: String) -> void:
+	_join_request_done = false
+	_join_request_err = ERR_BUSY
+	_join_request_err = await lobby.join_lobby(target)
+	_join_request_done = true
+
+
+func _await_request_done(done_flag: StringName, timeout_seconds: float = 12.0) -> bool:
+	var elapsed := 0.0
+	while elapsed < timeout_seconds:
+		if bool(get(done_flag)):
+			return true
+		await get_tree().create_timer(0.05).timeout
+		elapsed += 0.05
+	return bool(get(done_flag))
+
+
 func _on_create_lobby() -> void:
 	if not _save_name():
 		return
@@ -252,8 +287,16 @@ func _on_create_lobby() -> void:
 	join_btn.disabled = true
 	refresh_btn.disabled = true
 	var is_public := public_toggle.button_pressed if public_toggle else true
-	var err : int = await lobby.host_lobby(7777, is_public)
+	_begin_host_request(is_public)
+	var finished := await _await_request_done("_host_request_done", 15.0)
 	_hide_loading()
+	if not finished:
+		status_label.text = "Timed out while creating game. Please try again."
+		create_btn.disabled = false
+		join_btn.disabled = false
+		refresh_btn.disabled = false
+		return
+	var err : int = _host_request_err
 	if err != OK:
 		status_label.text = "Failed to create game."
 		create_btn.disabled = false
@@ -268,7 +311,13 @@ func _on_join() -> void:
 	if not _save_name():
 		return
 	var target : String
-	if _eos_available():
+	if _using_webrtc_transport():
+		target = code_edit.text.strip_edges()
+		if target == "":
+			status_label.text = "Please enter a room code."
+			return
+		_show_loading("Joining room %s" % target)
+	elif _eos_available():
 		target = code_edit.text.strip_edges()
 		if target == "":
 			status_label.text = "Please enter a lobby ID."
@@ -291,8 +340,18 @@ func _on_join() -> void:
 		lobby.connected.disconnect(_on_connected)
 	# Wire connected signal one-shot — fires asynchronously when peer connects.
 	lobby.connected.connect(_on_lobby_connected_signal, CONNECT_ONE_SHOT)
-	var err : int = await lobby.join_lobby(target)
+	_begin_join_request(target)
+	var finished := await _await_request_done("_join_request_done", 15.0)
 	_hide_loading()
+	if not finished:
+		if lobby.connected.is_connected(_on_lobby_connected_signal):
+			lobby.connected.disconnect(_on_lobby_connected_signal)
+		status_label.text = "Timed out while joining. Check the code and try again."
+		create_btn.disabled = false
+		join_btn.disabled = false
+		refresh_btn.disabled = false
+		return
+	var err : int = _join_request_err
 	if err != OK:
 		if lobby.connected.is_connected(_on_lobby_connected_signal):
 			lobby.connected.disconnect(_on_lobby_connected_signal)
@@ -354,11 +413,14 @@ func _refresh_public_lobbies() -> void:
 	for i in _public_lobbies.size():
 		var lb := _public_lobbies[i]
 		var lobby_id := str(lb.get("lobby_id", ""))
+		var short_code := str(lb.get("short_code", ""))
+		if short_code == "":
+			short_code = lobby_id
 		var line := "%s  [%d/%d]  Code: %s" % [
 			str(lb.get("host_name", "Host")),
 			int(lb.get("members", 0)),
 			int(lb.get("max_members", 8)),
-			lobby_id,
+			short_code,
 		]
 		lobby_list.add_item(line)
 	refresh_btn.disabled = false
@@ -421,3 +483,12 @@ func _decode_enet_code_or_address(raw: String) -> String:
 	if ":" in decoded:
 		return decoded.split(":", false, 1)[0]
 	return decoded
+
+
+func _using_webrtc_transport() -> bool:
+	if OS.has_feature("web"):
+		return true
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		return bool(gs.get("force_webrtc_on_native")) and str(gs.get("webrtc_signal_url")).strip_edges() != ""
+	return false

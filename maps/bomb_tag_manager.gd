@@ -305,13 +305,63 @@ func _rpc_round_over(updated_scores: Dictionary) -> void:
 	if has_node("/root/GameSettings"):
 		var gs : Node = get_node("/root/GameSettings")
 		gs.lps_scores = _scores.duplicate()
+		var names_snapshot : Dictionary = {}
+		if has_node("/root/GameLobby"):
+			for pid : int in _scores.keys():
+				names_snapshot[pid] = GameLobby.display_name(pid)
+		gs.lps_player_names = names_snapshot
 		gs.lps_current_round = current_round
 		gs.lps_match_active = true
 
-	await get_tree().create_timer(1.0).timeout
+	var winner_id : int = _find_score_leader(_scores)
+	await _play_winner_camera(winner_id)
 	if is_inside_tree():
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		get_tree().change_scene_to_file("res://multiplayer/SelectionScreen.tscn")
+
+
+func _find_score_leader(scores: Dictionary) -> int:
+	var best_id : int = -1
+	var best_score : int = -999999
+	for pid : int in scores.keys():
+		var score : int = int(scores.get(pid, 0))
+		if score > best_score:
+			best_score = score
+			best_id = pid
+	return best_id
+
+
+func _play_winner_camera(winner_id: int) -> void:
+	await get_tree().create_timer(0.4).timeout
+	if winner_id < 0:
+		return
+	var players_container : Node = get_parent().get_node_or_null("Players")
+	if players_container == null:
+		return
+	var winner_node := players_container.get_node_or_null("Player_%d" % winner_id)
+	if winner_node == null or not (winner_node is Player):
+		return
+
+	var winner_pos : Vector3 = (winner_node as Player).global_position
+	var orbit_cam := Camera3D.new()
+	orbit_cam.current = true
+	get_parent().add_child(orbit_cam)
+
+	var duration : float = 1.6
+	var radius : float = 3.0
+	var elapsed : float = 0.0
+	while elapsed < duration and is_inside_tree():
+		var t : float = elapsed / duration
+		var angle : float = t * TAU
+		orbit_cam.global_position = winner_pos + Vector3(cos(angle) * radius, 1.8, sin(angle) * radius)
+		orbit_cam.look_at(winner_pos + Vector3(0.0, 1.0, 0.0), Vector3.UP)
+		await get_tree().process_frame
+		elapsed += get_process_delta_time()
+
+	if is_instance_valid(orbit_cam):
+		orbit_cam.queue_free()
+	if _local_player and is_instance_valid(_local_player):
+		_local_player.camera.make_current()
 
 
 func _update_local_hud() -> void:

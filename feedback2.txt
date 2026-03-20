@@ -18,7 +18,7 @@ Map:
 [DONE] everyone shouldn't  spawn on the same platform, spread them out, add spawners where a player can spawn, no two players or more can spawn on the same platform.
 [DONE] Moon forest is a bit too dark, add moonlight.
 [DONE] Moon forest needs a special mechanic, like canyon has the zipline but this one there are twigs sticking out of the trees, and if the user grabs them they start spnning around the twig, we need more though, including other revamps for other maps and how they woudl fucntion, have a conversation with me and ask questions like with the canyon.
-If you land on the edge of a platform, you have less range to push off of because the other side
+If you land on the edge of a platform, you have less range to push off of because you cant go off of it. The whole pushing to move on the ground is unsatisfiying and requires a conversation and discussion around how to fix this.
 
 Buff:
 repulsion is useless for tag games, dont make it an option buff when selecting.
@@ -32,13 +32,12 @@ My friend complained that being on the ground sucks, he suggested a map with it 
 Have a cool camera animation circling the player who won in the  game before teleporting them back to the lobby.
 The leaderboard names arent showing, i told you not to use labels cause they follow the camera, if you can make it stop following the camera that would be nice, if not, use the viewport texture with cards ontop.
 For games like banana frenzy and last person standing, there is no sabotage from other players, previsouly it was the poo throwing but i believe that isnt good anymore. we can have a discussion abotu this when we reach to it.
+the zipline should behave the same way as the vine, so when you let go you can boost to where u look, same with twig, twig no longer spinning, also twig as a bug that stops the game when touching it.
+For the canyon, the user keeps getting stuck at the bottom because when they boost they hit their heads on the walls, make sure the walsl are connect to the ground, and if you push off a wall at an angle you can go up, decrease the power of double push and make combos more satsifying and less speedy, currently players are flying off the map.
+Make it web compatible, mostly played on web.
+
 
 Multiplayer:
 Lobby terminating and creation is still very bugged, i can leave, join back and leave, and it will show as if theres 2 players in the game.
 I played with my friends and it said 8/8 and he couldnt join when it was actually 4/8. The room code for me (the host) also was different from all of my friends.
 The order of players in the lobby is also weird.
-
-
-Sugessted changes, discussion needed and questions:
-Have an option to be either in spectator mode or ghost mode when you die, where nobody can see you or interact with you but you can see them but cant interact with them, and you are semi transprent, no colors.
-Instead of maps changing every round, a round is 3 gaemodes with 3 buffs in 1 map. selection of the gamemodes pop up at screen via gui, unlocking the mouse.

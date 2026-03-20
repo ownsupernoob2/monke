@@ -64,10 +64,12 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("chat") and not _is_open:
 		_open_chat()
-		get_viewport().set_input_as_handled()
+		if is_inside_tree():
+			get_viewport().set_input_as_handled()
 	elif _is_open and event.is_action_pressed("ui_cancel"):
 		_close_chat()
-		get_viewport().set_input_as_handled()
+		if is_inside_tree():
+			get_viewport().set_input_as_handled()
 
 
 func _open_chat() -> void:
@@ -260,10 +262,10 @@ func _on_server_closed() -> void:
 	if has_node("/root/GameSettings"):
 		var gs : Node = get_node("/root/GameSettings")
 		if gs.disconnect_message.is_empty():
-			gs.disconnect_message = "Host left the server."
+			gs.disconnect_message = "Host left the lobby."
 		# Clear chat history on disconnect so a fresh session starts clean.
 		gs.clear_chat_history()
-	# Return to multiplayer lobby screen after a short delay.
-	await get_tree().create_timer(2.0).timeout
+	# Return to main menu after a short delay.
+	await get_tree().create_timer(1.0).timeout
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	get_tree().change_scene_to_file("res://multiplayer/ConnectScreen.tscn")
+	get_tree().change_scene_to_file("res://ui/MainMenu.tscn")

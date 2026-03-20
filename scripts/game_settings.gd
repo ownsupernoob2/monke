@@ -13,12 +13,16 @@ var last_excluded_gamemode : String = ""
 
 # ── LPS match state (persists across rounds / scene changes) ────────────────
 var lps_scores         : Dictionary = {}   # peer_id → cumulative points
+var lps_player_names   : Dictionary = {}   # peer_id → display name snapshot
 var lps_current_round  : int        = 0    # last completed round number
 var lps_match_active   : bool       = false
 var lps_match_complete : bool       = false   # all rounds done; next selection → lobby
+var webrtc_signal_url  : String     = ""
+var force_webrtc_on_native : bool = false
 
 func lps_clear() -> void:
 	lps_scores.clear()
+	lps_player_names.clear()
 	lps_current_round  = 0
 	lps_match_active   = false
 	lps_match_complete = false

@@ -149,6 +149,7 @@ func _on_player_joined(id: int, p_name: String) -> void:
 	if player_container.has_node("P_%d" % id):
 		return
 	_spawn_player_model(id, p_name)
+	_reposition_models()
 	_update_count()
 
 
@@ -174,7 +175,7 @@ func _on_game_starting() -> void:
 func _on_server_closed() -> void:
 	if has_node("/root/GameSettings"):
 		var gs : Node = get_node("/root/GameSettings")
-		gs.disconnect_message = "Host left the server."
+		gs.disconnect_message = "Host left the lobby."
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
 

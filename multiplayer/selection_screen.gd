@@ -80,6 +80,7 @@ var _leaderboard_station : Node3D = null    ## built at runtime
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	set_multiplayer_authority(GameLobby.get_host_peer_id())
 	_setup_leaderboard_station()
 	# Hide 3-D Label3Ds — SubViewport card UIs replace them.
 	for card : Node3D in gm_cards + map_cards + buff_cards:
@@ -239,14 +240,38 @@ func _randomise_offerings() -> void:
 
 	var buff_pool := ALL_BUFFS.duplicate()
 	buff_pool.shuffle()
-	offered_buffs = [buff_pool[0], buff_pool[1], buff_pool[2]]
+	offered_buffs.clear()
+	for i in range(mini(3, buff_pool.size())):
+		offered_buffs.append(buff_pool[i])
+	offered_buffs = _normalize_three_offers(offered_buffs, ALL_BUFFS)
+
+
+func _reroll_buff_offerings_for_gamemode(gamemode: String) -> void:
+	var buff_pool := ALL_BUFFS.duplicate()
+	buff_pool.shuffle()
+	offered_buffs.clear()
+	for i in range(mini(3, buff_pool.size())):
+		offered_buffs.append(buff_pool[i])
+	offered_buffs = _normalize_three_offers(offered_buffs, ALL_BUFFS)
+
+
+@rpc("any_peer", "reliable", "call_remote")
+func _rpc_sync_buff_offerings(buffs : Array) -> void:
+	if not _is_host_message_sender():
+		return
+	offered_buffs.clear()
+	for b in buffs:
+		offered_buffs.append(str(b))
+	offered_buffs = _normalize_three_offers(offered_buffs, ALL_BUFFS)
+	for i : int in 3:
+		_set_card_text(buff_cards[i], offered_buffs[i])
 
 
 func _apply_labels() -> void:
 	for i : int in 3:
-		_set_card_text(gm_cards[i],   offered_gamemodes[i])
-		_set_card_text(map_cards[i],  offered_maps[i])
-		_set_card_text(buff_cards[i], offered_buffs[i])
+		_set_card_text(gm_cards[i],   _offer_at(offered_gamemodes, i))
+		_set_card_text(map_cards[i],  _offer_at(offered_maps, i))
+		_set_card_text(buff_cards[i], _offer_at(offered_buffs, i))
 
 
 func _set_card_text(card : Node3D, text : String) -> void:
@@ -297,8 +322,10 @@ func _cards_for(phase : int) -> Array[Node3D]:
 #  RPC – SYNC OFFERINGS  (host → clients)
 # ══════════════════════════════════════════════════════════════════════════════
 
-@rpc("authority", "reliable", "call_remote")
+@rpc("any_peer", "reliable", "call_remote")
 func _rpc_sync_offerings(gamemodes : Array, maps : Array, buffs : Array) -> void:
+	if not _is_host_message_sender():
+		return
 	offered_gamemodes.clear()
 	offered_maps.clear()
 	offered_buffs.clear()
@@ -308,6 +335,9 @@ func _rpc_sync_offerings(gamemodes : Array, maps : Array, buffs : Array) -> void
 		offered_maps.append(str(m))
 	for b in buffs:
 		offered_buffs.append(str(b))
+	offered_gamemodes = _normalize_three_offers(offered_gamemodes, ALL_GAMEMODES)
+	offered_maps = _normalize_three_offers(offered_maps, ALL_MAPS.keys())
+	offered_buffs = _normalize_three_offers(offered_buffs, ALL_BUFFS)
 	var _gs : Node = get_node_or_null("/root/GameSettings")
 	_from_leaderboard = _gs != null and _gs.lps_match_active
 	_apply_labels()
@@ -363,7 +393,7 @@ func _on_card_input(_cam : Node, event : InputEvent, _pos : Vector3,
 	if GameLobby.is_host():
 		_handle_vote(multiplayer.get_unique_id(), idx)
 	else:
-		rpc_id(1, "_rpc_submit_vote", current_phase, idx)
+		rpc_id(GameLobby.get_host_peer_id(), "_rpc_submit_vote", current_phase, idx)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -419,8 +449,10 @@ func _handle_vote(peer_id : int, card_idx : int) -> void:
 		_phase_timer = 2.0
 
 
-@rpc("authority", "reliable", "call_remote")
+@rpc("any_peer", "reliable", "call_remote")
 func _rpc_broadcast_votes(phase : int, vote_dict : Dictionary) -> void:
+	if not _is_host_message_sender():
+		return
 	if phase != current_phase or _phase_decided:
 		return
 	_current_votes = vote_dict
@@ -522,8 +554,10 @@ func _finalize_current_phase() -> void:
 #  RPC – PHASE RESULT  (host → clients)
 # ══════════════════════════════════════════════════════════════════════════════
 
-@rpc("authority", "reliable", "call_remote")
+@rpc("any_peer", "reliable", "call_remote")
 func _rpc_phase_result(phase : int, winner_idx : int) -> void:
+	if not _is_host_message_sender():
+		return
 	_apply_phase_result(phase, winner_idx)
 
 
@@ -537,14 +571,14 @@ func _apply_phase_result(phase : int, winner_idx : int) -> void:
 	# Store the winning selection.
 	match phase:
 		Phase.GAMEMODE:
-			chosen_gamemode = offered_gamemodes[winner_idx]
+			chosen_gamemode = _offer_at(offered_gamemodes, winner_idx)
 			gm_preview.text = "Gamemode: %s" % chosen_gamemode
 		Phase.MAP:
-			var map_name : String = offered_maps[winner_idx]
-			chosen_map_path = ALL_MAPS[map_name]
+			var map_name : String = _offer_at(offered_maps, winner_idx)
+			chosen_map_path = str(ALL_MAPS.get(map_name, "res://maps/SwampForest.tscn"))
 			map_preview.text = "Map: %s" % map_name
 		Phase.BUFF:
-			chosen_buff = offered_buffs[winner_idx]
+			chosen_buff = _offer_at(offered_buffs, winner_idx)
 			buff_preview.text = "Buff: %s" % chosen_buff
 
 	await get_tree().create_timer(1.2).timeout
@@ -567,6 +601,12 @@ func _highlight_winner(cards : Array[Node3D], winner_idx : int) -> void:
 func _advance_phase(phase : int) -> void:
 	match phase:
 		Phase.GAMEMODE:
+			# Buff phase depends on selected gamemode (e.g. no Repulsor in Tag modes).
+			if GameLobby.is_host():
+				_reroll_buff_offerings_for_gamemode(chosen_gamemode)
+				offered_buffs = _normalize_three_offers(offered_buffs, ALL_BUFFS)
+				rpc("_rpc_sync_buff_offerings", offered_buffs)
+				_rpc_sync_buff_offerings(offered_buffs)
 			title_label.text = "CHOOSE MAP"
 			anim_player.play("pivot_to_map")
 			await anim_player.animation_finished
@@ -612,7 +652,7 @@ func _launch_game() -> void:
 func _on_server_closed() -> void:
 	if has_node("/root/GameSettings"):
 		var gs : Node = get_node("/root/GameSettings")
-		gs.disconnect_message = "Host left the server."
+		gs.disconnect_message = "Host left the lobby."
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
 
@@ -691,6 +731,7 @@ func _populate_leaderboard() -> void:
 
 	# Sort players by score descending.
 	var scores : Dictionary = gs.lps_scores
+	var saved_names : Dictionary = gs.lps_player_names if gs.get("lps_player_names") != null else {}
 	var sorted_ids : Array = []
 	for pid : int in scores:
 		sorted_ids.append(pid)
@@ -705,7 +746,7 @@ func _populate_leaderboard() -> void:
 	for i : int in mini(sorted_ids.size(), 3):
 		var pid   : int    = sorted_ids[i]
 		var pts   : int    = scores.get(pid, 0)
-		var pname : String = GameLobby.display_name(pid)
+		var pname : String = str(saved_names.get(pid, GameLobby.display_name(pid)))
 
 		var root := Node3D.new()
 		root.name = "Contestant%d" % i
@@ -815,8 +856,10 @@ func _tween_from_leaderboard_to_gamemode() -> void:
 
 
 ## Return all players to the lobby without disconnecting.
-@rpc("authority", "reliable", "call_remote")
+@rpc("any_peer", "reliable", "call_remote")
 func _rpc_end_to_lobby() -> void:
+	if not _is_host_message_sender():
+		return
 	_end_to_lobby()
 
 
@@ -827,3 +870,36 @@ func _end_to_lobby() -> void:
 		get_node("/root/GameSettings").lps_clear()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().change_scene_to_file("res://multiplayer/LobbyRoom.tscn")
+
+
+func _normalize_three_offers(values: Array, fallback_pool: Array) -> Array[String]:
+	var out : Array[String] = []
+	for v in values:
+		var s := str(v)
+		if s != "" and s != "---" and not out.has(s):
+			out.append(s)
+	for v in fallback_pool:
+		var s := str(v)
+		if s != "" and not out.has(s):
+			out.append(s)
+	while out.size() < 3:
+		out.append("---")
+	if out.size() > 3:
+		out = out.slice(0, 3)
+	return out
+
+
+func _offer_at(values: Array[String], index: int) -> String:
+	if index >= 0 and index < values.size():
+		return values[index]
+	return "---"
+
+
+func _is_host_message_sender() -> bool:
+	if GameLobby.is_host():
+		return true
+	var sender : int = multiplayer.get_remote_sender_id()
+	# Local/call_local path.
+	if sender == 0:
+		return true
+	return sender == GameLobby.get_host_peer_id()

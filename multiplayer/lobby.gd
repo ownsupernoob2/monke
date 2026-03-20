@@ -54,12 +54,38 @@ var _hidden_public_lobbies : Dictionary = {}
 var _hlobbies : Node = null
 ## The HLobby object for the currently active EOS lobby.
 var _hlobby = null
+## Cached host peer ID for RPC validation (EOS host ID can differ from 1).
+var _host_peer_id : int = 1
+
+## WebRTC (web-compatible) runtime.
+var _using_webrtc : bool = false
+var _signal_ws : WebSocketPeer = null
+var _signal_open : bool = false
+var _signal_room_code : String = ""
+var _webrtc_peer_id : int = 0
+var _webrtc_peer : WebRTCMultiplayerPeer = null
+var _webrtc_connections : Dictionary = {}   # peer_id -> WebRTCPeerConnection
 
 
 func _notification(what: int) -> void:
 	# Ensure host-owned lobbies are disbanded when quitting the app.
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_PREDELETE:
 		disconnect_lobby()
+
+
+func _ready() -> void:
+	set_process(true)
+
+
+func _process(_delta: float) -> void:
+	if not _using_webrtc:
+		return
+	_poll_webrtc_signal()
+	for conn in _webrtc_connections.values():
+		if conn is WebRTCPeerConnection:
+			(conn as WebRTCPeerConnection).poll()
+	if _webrtc_peer:
+		_webrtc_peer.poll()
 
 
 func get_local_name() -> String:
@@ -71,6 +97,14 @@ func get_local_name() -> String:
 
 func is_host() -> bool:
 	return multiplayer.has_multiplayer_peer() and multiplayer.is_server()
+
+
+func get_host_peer_id() -> int:
+	if is_host():
+		return multiplayer.get_unique_id()
+	if _host_peer_id > 0:
+		return _host_peer_id
+	return 1
 
 
 func is_current_lobby_public() -> bool:
@@ -94,6 +128,12 @@ func eos_available() -> bool:
 ## When EOS is not available: falls back to ENet on [port].
 ## Returns OK or an Error code; check [current_lobby_id] for the room code.
 func host_lobby(port: int = DEFAULT_PORT, public_lobby: bool = true) -> Error:
+	if _should_use_webrtc():
+		if _web_signal_url() == "":
+			push_error("Lobby: Web host requires GameSettings.webrtc_signal_url.")
+			connection_failed.emit()
+			return ERR_UNAVAILABLE
+		return await _host_lobby_webrtc()
 	if eos_available():
 		return await _host_lobby_eos(public_lobby)
 	return _host_lobby_enet(port)
@@ -104,6 +144,12 @@ func host_lobby(port: int = DEFAULT_PORT, public_lobby: bool = true) -> Error:
 ## When EOS is ready and the string looks like a lobby id, uses EOS P2P.
 ## Otherwise falls back to ENet using [code_or_address] as the IP.
 func join_lobby(code_or_address: String = "127.0.0.1", port: int = DEFAULT_PORT) -> Error:
+	if _should_use_webrtc():
+		if _web_signal_url() == "":
+			push_error("Lobby: Web join requires GameSettings.webrtc_signal_url.")
+			connection_failed.emit()
+			return ERR_UNAVAILABLE
+		return await _join_lobby_webrtc(code_or_address)
 	if eos_available():
 		return await _join_lobby_eos(code_or_address)
 	return _join_lobby_enet(code_or_address, port)
@@ -148,11 +194,21 @@ func list_public_lobbies() -> Array[Dictionary]:
 		var attr = lb.get_attribute("host_name")
 		if attr is Dictionary and attr.has("value"):
 			host_name = str(attr.value)
+		var short_code := _derive_short_code(str(lb.lobby_id))
+		var short_attr = lb.get_attribute("short_code")
+		if short_attr is Dictionary and short_attr.has("value"):
+			short_code = str(short_attr.value)
+
+		var member_count : int = int(lb.members.size())
+		var count_attr = lb.get_attribute("player_count")
+		if count_attr is Dictionary and count_attr.has("value"):
+			member_count = maxi(0, int(str(count_attr.value)))
+
 		result.append({
 			"lobby_id": str(lb.lobby_id),
-			"short_code": "",
+			"short_code": short_code,
 			"host_name": host_name,
-			"members": int(lb.members.size()),
+			"members": member_count,
 			"max_members": int(lb.max_members),
 		})
 	return result
@@ -215,9 +271,24 @@ func disconnect_lobby_async() -> void:
 		if not eos_ok:
 			print("Lobby: EOS leave/destroy did not complete (likely shutdown race).")
 		_hlobby = null
+
+	# Tear down WebRTC signaling + peer links.
+	if _using_webrtc:
+		for conn in _webrtc_connections.values():
+			if conn is WebRTCPeerConnection:
+				(conn as WebRTCPeerConnection).close()
+		_webrtc_connections.clear()
+		if _signal_ws != null and _signal_ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
+			_signal_ws.close()
+		_signal_ws = null
+		_signal_open = false
+		_signal_room_code = ""
+		_webrtc_peer = null
 	current_lobby_id = ""
 	current_short_code = ""
 	_using_eos = false
+	_using_webrtc = false
+	_host_peer_id = 1
 	_set_match_state(false, "", "", "")
 	if peer != null:
 		peer.close()
@@ -262,6 +333,235 @@ func _disconnect_multiplayer_signals() -> void:
 		mp.peer_disconnected.disconnect(_on_peer_disconnected)
 
 
+# ── WebRTC implementation (web builds) ──────────────────────────────────────
+
+func _host_lobby_webrtc() -> Error:
+	await disconnect_lobby_async()
+	_using_webrtc = true
+	_using_eos = false
+	_current_lobby_public = true
+	_webrtc_peer_id = 1
+	_host_peer_id = 1
+	current_short_code = _generate_short_code(6)
+	current_lobby_id = current_short_code
+	_signal_room_code = current_short_code
+
+	_webrtc_peer = WebRTCMultiplayerPeer.new()
+	var err := _webrtc_peer.create_server()
+	if err != OK:
+		push_error("Lobby: WebRTC create_server failed – %s" % error_string(err))
+		connection_failed.emit()
+		return err
+
+	peer = _webrtc_peer
+	multiplayer.multiplayer_peer = peer
+	_disconnect_multiplayer_signals()
+	multiplayer.peer_connected.connect(_on_peer_connected)
+	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+
+	err = await _signal_join_room(current_short_code, _webrtc_peer_id)
+	if err != OK:
+		await disconnect_lobby_async()
+		connection_failed.emit()
+		return err
+
+	_register_self()
+	connected.emit()
+	return OK
+
+
+func _join_lobby_webrtc(room_code: String) -> Error:
+	await disconnect_lobby_async()
+	_using_webrtc = true
+	_using_eos = false
+	_current_lobby_public = true
+
+	var room := room_code.strip_edges().to_upper()
+	if room == "":
+		return ERR_INVALID_PARAMETER
+	current_short_code = room
+	current_lobby_id = room
+	_signal_room_code = room
+
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	_webrtc_peer_id = rng.randi_range(2, 2_000_000_000)
+	_webrtc_peer = WebRTCMultiplayerPeer.new()
+	var err := _webrtc_peer.create_client(_webrtc_peer_id)
+	if err != OK:
+		push_error("Lobby: WebRTC create_client failed – %s" % error_string(err))
+		connection_failed.emit()
+		return err
+
+	peer = _webrtc_peer
+	multiplayer.multiplayer_peer = peer
+	_host_peer_id = -1
+	_disconnect_multiplayer_signals()
+	multiplayer.connected_to_server.connect(_on_connected)
+	multiplayer.connection_failed.connect(_on_failed)
+	multiplayer.server_disconnected.connect(_on_server_disconnected)
+	multiplayer.peer_connected.connect(_on_peer_connected)
+	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+
+	err = await _signal_join_room(room, _webrtc_peer_id)
+	if err != OK:
+		await disconnect_lobby_async()
+		connection_failed.emit()
+		return err
+
+	return OK
+
+
+func _signal_join_room(room: String, peer_id: int) -> Error:
+	_signal_ws = WebSocketPeer.new()
+	var err := _signal_ws.connect_to_url(_web_signal_url())
+	if err != OK:
+		return err
+
+	var timeout := 5.0
+	while timeout > 0.0:
+		_signal_ws.poll()
+		var state := _signal_ws.get_ready_state()
+		if state == WebSocketPeer.STATE_OPEN:
+			_signal_open = true
+			var join_msg := {
+				"type": "join",
+				"room": room,
+				"peer_id": str(peer_id),
+			}
+			_signal_ws.send_text(JSON.stringify(join_msg))
+			return OK
+		if state == WebSocketPeer.STATE_CLOSING or state == WebSocketPeer.STATE_CLOSED:
+			return FAILED
+		await get_tree().create_timer(0.05).timeout
+		timeout -= 0.05
+	return ERR_TIMEOUT
+
+
+func _poll_webrtc_signal() -> void:
+	if _signal_ws == null:
+		return
+	_signal_ws.poll()
+	var state := _signal_ws.get_ready_state()
+	if state == WebSocketPeer.STATE_CLOSED:
+		if not is_host() and multiplayer.has_multiplayer_peer():
+			server_closed.emit()
+		return
+	if state != WebSocketPeer.STATE_OPEN:
+		return
+	while _signal_ws.get_available_packet_count() > 0:
+		var raw := _signal_ws.get_packet().get_string_from_utf8()
+		var parsed = JSON.parse_string(raw)
+		if not (parsed is Dictionary):
+			continue
+		_handle_signal_message(parsed as Dictionary)
+
+
+func _handle_signal_message(msg: Dictionary) -> void:
+	var t := str(msg.get("type", ""))
+	if t == "room_peers":
+		var peers_list: Array = msg.get("peers", [])
+		if is_host():
+			for pid_variant in peers_list:
+				var pid := int(str(pid_variant))
+				if pid <= 0 or pid == _webrtc_peer_id:
+					continue
+				if not _webrtc_connections.has(pid):
+					var conn := _ensure_webrtc_connection(pid)
+					if conn:
+						conn.create_offer()
+		else:
+			for pid_variant in peers_list:
+				var pid := int(str(pid_variant))
+				if pid != _webrtc_peer_id and (_host_peer_id <= 0 or pid < _host_peer_id):
+					_host_peer_id = pid
+		return
+
+	if t == "signal":
+		var from_id := int(str(msg.get("from", "0")))
+		if from_id <= 0:
+			return
+		var data: Dictionary = msg.get("data", {})
+		_handle_webrtc_signal_payload(from_id, data)
+
+
+func _handle_webrtc_signal_payload(from_id: int, data: Dictionary) -> void:
+	var kind := str(data.get("kind", ""))
+	var conn := _ensure_webrtc_connection(from_id)
+	if conn == null:
+		return
+	match kind:
+		"sdp":
+			var sdp_type := str(data.get("type", ""))
+			var sdp := str(data.get("sdp", ""))
+			if sdp_type == "offer":
+				conn.set_remote_description("offer", sdp)
+				conn.create_answer()
+			elif sdp_type == "answer":
+				conn.set_remote_description("answer", sdp)
+		"ice":
+			conn.add_ice_candidate(
+				str(data.get("media", "0")),
+				int(data.get("index", 0)),
+				str(data.get("name", ""))
+			)
+
+
+func _ensure_webrtc_connection(remote_id: int) -> WebRTCPeerConnection:
+	if _webrtc_connections.has(remote_id):
+		return _webrtc_connections[remote_id] as WebRTCPeerConnection
+	if _webrtc_peer == null:
+		return null
+
+	var conn := WebRTCPeerConnection.new()
+	var config := {
+		"iceServers": [
+			{ "urls": ["stun:stun.l.google.com:19302"] }
+		]
+	}
+	var err := conn.initialize(config)
+	if err != OK:
+		return null
+
+	conn.session_description_created.connect(_on_webrtc_session_description.bind(remote_id))
+	conn.ice_candidate_created.connect(_on_webrtc_ice_candidate.bind(remote_id))
+	_webrtc_peer.add_peer(conn, remote_id)
+	_webrtc_connections[remote_id] = conn
+	return conn
+
+
+func _on_webrtc_session_description(type: String, sdp: String, remote_id: int) -> void:
+	if not _webrtc_connections.has(remote_id):
+		return
+	var conn := _webrtc_connections[remote_id] as WebRTCPeerConnection
+	conn.set_local_description(type, sdp)
+	_signal_send(remote_id, {
+		"kind": "sdp",
+		"type": type,
+		"sdp": sdp,
+	})
+
+
+func _on_webrtc_ice_candidate(media: String, index: int, name: String, remote_id: int) -> void:
+	_signal_send(remote_id, {
+		"kind": "ice",
+		"media": media,
+		"index": index,
+		"name": name,
+	})
+
+
+func _signal_send(to_peer_id: int, data: Dictionary) -> void:
+	if _signal_ws == null or _signal_ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		return
+	var payload := {
+		"type": "signal",
+		"to": str(to_peer_id),
+		"data": data,
+	}
+	_signal_ws.send_text(JSON.stringify(payload))
+
+
 # ── EOS implementation ────────────────────────────────────────────────────────
 
 func _host_lobby_eos(public_lobby: bool = true) -> Error:
@@ -292,20 +592,20 @@ func _host_lobby_eos(public_lobby: bool = true) -> Error:
 	current_lobby_id = lobby.lobby_id
 	_using_eos = true
 	_current_lobby_public = public_lobby
-	current_short_code = ""
+	current_short_code = _derive_short_code(current_lobby_id)
 	# New host session should always be visible in browser (if public).
 	_hidden_public_lobbies.erase(current_lobby_id)
 
 	# Metadata used by lobby finder and short-code joining.
-	_hlobby.add_attribute("host_name", get_local_name(), EOS.Lobby.LobbyAttributeVisibility.Public)
 	_hlobby.add_attribute("lobby_public", "1" if public_lobby else "0", EOS.Lobby.LobbyAttributeVisibility.Public)
-	await _hlobby.update_async()
+	await _publish_lobby_metadata()
 
 	# Spawn the EOSGMultiplayerPeer server.
 	var eos_peer = EOSGMultiplayerPeer.new()
 	eos_peer.create_server(SOCKET_NAME)
 	peer = eos_peer
 	multiplayer.multiplayer_peer = peer
+	_host_peer_id = multiplayer.get_unique_id()
 	# Disconnect first in case of a previous failed host attempt.
 	_disconnect_multiplayer_signals()
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -334,8 +634,24 @@ func _join_lobby_eos(lobby_id: String) -> Error:
 	# If the user explicitly joins by ID, don't keep it hidden locally.
 	_hidden_public_lobbies.erase(query)
 
+	# Accept short room code by resolving it to a full lobby ID.
+	var resolved_lobby_id : String = query
+	if query.find("-") == -1 and query.length() <= 10:
+		var browse_results = await hlobbies.search_by_bucket_id_async("monke")
+		if browse_results != null:
+			for lb in browse_results:
+				if lb == null:
+					continue
+				var candidate := _derive_short_code(str(lb.lobby_id))
+				var sc_attr = lb.get_attribute("short_code")
+				if sc_attr is Dictionary and sc_attr.has("value"):
+					candidate = str(sc_attr.value)
+				if candidate.to_upper() == query.to_upper():
+					resolved_lobby_id = str(lb.lobby_id)
+					break
+
 	# Join by full EOS lobby ID.
-	var results = await hlobbies.search_by_lobby_id_async(query)
+	var results = await hlobbies.search_by_lobby_id_async(resolved_lobby_id)
 	if results == null or results.is_empty():
 		push_error("Lobby: no EOS lobby found for id: %s" % query)
 		connection_failed.emit()
@@ -358,7 +674,7 @@ func _join_lobby_eos(lobby_id: String) -> Error:
 
 	_hlobby = lobby
 	current_lobby_id = str(lobby.lobby_id)
-	current_short_code = ""
+	current_short_code = _derive_short_code(current_lobby_id)
 	_using_eos = true
 	_current_lobby_public = true
 
@@ -366,6 +682,7 @@ func _join_lobby_eos(lobby_id: String) -> Error:
 	eos_peer.create_client(SOCKET_NAME, host_puid)
 	peer = eos_peer
 	multiplayer.multiplayer_peer = peer
+	_host_peer_id = -1
 	# Disconnect first in case of a previous failed join attempt.
 	_disconnect_multiplayer_signals()
 	multiplayer.connected_to_server.connect(_on_connected)
@@ -397,6 +714,7 @@ func _host_lobby_enet(port: int = DEFAULT_PORT) -> Error:
 	peer = enet_peer
 	_using_eos = false
 	multiplayer.multiplayer_peer = peer
+	_host_peer_id = multiplayer.get_unique_id()
 	_register_self()
 	_disconnect_multiplayer_signals()
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -415,6 +733,7 @@ func _join_lobby_enet(address: String = "127.0.0.1", port: int = DEFAULT_PORT) -
 	peer = enet_peer
 	_using_eos = false
 	multiplayer.multiplayer_peer = peer
+	_host_peer_id = -1
 	_disconnect_multiplayer_signals()
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(_on_failed)
@@ -547,6 +866,7 @@ func _register_self() -> void:
 	if is_host():
 		_prune_stale_players_host()
 		_broadcast_player_snapshot()
+		_publish_lobby_metadata.call_deferred()
 
 
 ## Returns a unique name for [param id] based on [param base], appending 2/3/… if taken.
@@ -640,6 +960,7 @@ func _on_peer_disconnected(id: int) -> void:
 		_prune_stale_players_host()
 		send_system_message("%s left the game." % p_name)
 		_broadcast_player_snapshot()
+		_publish_lobby_metadata.call_deferred()
 
 
 ## Returns the stored (already-deduplicated) name for a peer.
@@ -699,6 +1020,31 @@ func _broadcast_player_snapshot() -> void:
 	_rpc_sync_players(snapshot)
 	rpc("_rpc_sync_lobby_identity", current_lobby_id, current_short_code)
 	_rpc_sync_lobby_identity(current_lobby_id, current_short_code)
+	_publish_lobby_metadata.call_deferred()
+
+
+func _accept_host_rpc_sender() -> bool:
+	if is_host():
+		return true
+	var sender_id : int = multiplayer.get_remote_sender_id()
+	# call_local / local invoke path
+	if sender_id == 0:
+		return true
+	if _host_peer_id <= 0 or _host_peer_id == 1:
+		_host_peer_id = sender_id
+		return true
+	return sender_id == _host_peer_id
+
+
+func _publish_lobby_metadata() -> void:
+	if not is_host() or not _using_eos or _hlobby == null:
+		return
+	if not _hlobby.is_valid():
+		return
+	_hlobby.add_attribute("host_name", get_local_name(), EOS.Lobby.LobbyAttributeVisibility.Public)
+	_hlobby.add_attribute("short_code", current_short_code, EOS.Lobby.LobbyAttributeVisibility.Public)
+	_hlobby.add_attribute("player_count", str(players.size()), EOS.Lobby.LobbyAttributeVisibility.Public)
+	await _hlobby.update_async()
 
 
 func _prune_stale_players_host() -> void:
@@ -717,8 +1063,10 @@ func _prune_stale_players_host() -> void:
 		player_left.emit(stale_id)
 
 
-@rpc("authority", "reliable", "call_remote")
+@rpc("any_peer", "reliable", "call_remote")
 func _rpc_sync_players(snapshot: Dictionary) -> void:
+	if not _accept_host_rpc_sender():
+		return
 	var incoming : Dictionary = {}
 	for key in snapshot.keys():
 		var pid : int = int(key)
@@ -762,10 +1110,38 @@ func _generate_short_code(length: int = 6) -> String:
 	return out
 
 
-@rpc("authority", "reliable", "call_remote")
+@rpc("any_peer", "reliable", "call_remote")
 func _rpc_sync_lobby_identity(lobby_id: String, short_code: String) -> void:
+	if not _accept_host_rpc_sender():
+		return
 	current_lobby_id = lobby_id
-	current_short_code = short_code
+	current_short_code = short_code if short_code != "" else _derive_short_code(lobby_id)
+
+
+func _derive_short_code(lobby_id: String) -> String:
+	if lobby_id == "":
+		return ""
+	var compact := lobby_id.replace("-", "").to_upper()
+	if compact.length() < 6:
+		return compact
+	return compact.substr(0, 6)
+
+
+func _web_signal_url() -> String:
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		var raw := str(gs.get("webrtc_signal_url"))
+		return raw.strip_edges()
+	return ""
+
+
+func _should_use_webrtc() -> bool:
+	if OS.has_feature("web"):
+		return true
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		return bool(gs.get("force_webrtc_on_native")) and _web_signal_url() != ""
+	return false
 
 
 func begin_match(map_path: String, gamemode: String, buff: String) -> void:
@@ -785,7 +1161,8 @@ func end_match() -> void:
 func request_match_state() -> void:
 	if is_host() or not multiplayer.has_multiplayer_peer():
 		return
-	rpc_id(1, "_rpc_request_match_state")
+	var target_host : int = _host_peer_id if _host_peer_id > 0 else 1
+	rpc_id(target_host, "_rpc_request_match_state")
 
 
 @rpc("any_peer", "reliable")
@@ -796,15 +1173,23 @@ func _rpc_request_match_state() -> void:
 	rpc_id(requester_id, "_rpc_set_match_state", match_in_progress, active_map_path, active_gamemode, active_buff)
 
 
-@rpc("authority", "reliable", "call_remote")
+@rpc("any_peer", "reliable", "call_remote")
 func _rpc_set_match_state(in_progress: bool, map_path: String, gamemode: String, buff: String) -> void:
+	if not _accept_host_rpc_sender():
+		return
 	_set_match_state(in_progress, map_path, gamemode, buff)
 
 
-@rpc("authority", "reliable", "call_remote")
+@rpc("any_peer", "reliable", "call_remote")
 func _rpc_host_disbanding() -> void:
 	if is_host():
 		return
+	if not _accept_host_rpc_sender():
+		return
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		if gs.disconnect_message.is_empty():
+			gs.disconnect_message = "Host left the lobby."
 	await disconnect_lobby_async()
 	server_closed.emit()
 

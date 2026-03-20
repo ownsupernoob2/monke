@@ -138,6 +138,16 @@ func init_from_id(p_lobby_id: String):
 		IEOS.rtc_data_data_received.connect(_on_rtc_data_data_received)
 
 
+## Returns the underlying EOS lobby details object used for join calls.
+func get_lobby_details():
+	return _lobby_details
+
+
+## Initialize this lobby from an EOS lobby details object.
+func init_from_details(lobby_details) -> void:
+	_init_from_details(lobby_details)
+
+
 
 ## Returns [Dictionary] or empty [Dictionary] if not found.
 func get_attribute(key: String):
