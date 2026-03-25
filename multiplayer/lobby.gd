@@ -542,12 +542,12 @@ func _on_webrtc_session_description(type: String, sdp: String, remote_id: int) -
 	})
 
 
-func _on_webrtc_ice_candidate(media: String, index: int, name: String, remote_id: int) -> void:
+func _on_webrtc_ice_candidate(media: String, index: int, candidate_name: String, remote_id: int) -> void:
 	_signal_send(remote_id, {
 		"kind": "ice",
 		"media": media,
 		"index": index,
-		"name": name,
+		"name": candidate_name,
 	})
 
 

@@ -41,7 +41,7 @@ func _ready() -> void:
 
 	# Show public IP (ENet) or room code (EOS) so the host can share it.
 	_lan_ip = _get_local_ip()
-	ip_label.text = "Code: fetching…"
+	ip_label.text = "Code: fetching..."
 	show_ip_btn.pressed.connect(_on_toggle_ip)
 	copy_code_btn.pressed.connect(_on_copy_code)
 	public_toggle.visible = lobby.is_host() and lobby.eos_available()
@@ -54,7 +54,7 @@ func _ready() -> void:
 		_refresh_ip_label()
 	else:
 		# ENet mode – fetch public IP as before.
-		ip_label.text = "IP: fetching…"
+		ip_label.text = "IP: fetching..."
 		copy_code_btn.visible = true
 		_fetch_public_ip()
 
@@ -289,13 +289,13 @@ func _refresh_ip_label() -> void:
 			ip_label.text = "Room code: %s" % code
 			show_ip_btn.text = "Hide"
 		else:
-			ip_label.text = "Room code: ●●●●●●"
+			ip_label.text = "Room code: ******"
 			show_ip_btn.text = "Show"
 		return
 
 	# ENet mode – display LAN / WAN IPs.
 	if _public_ip == "":
-		ip_label.text = "IP: fetching…"
+		ip_label.text = "IP: fetching..."
 		show_ip_btn.text = "Show"
 		return
 	var enet_code := _enet_share_code()
@@ -305,7 +305,7 @@ func _refresh_ip_label() -> void:
 		ip_label.text = "LAN: %s  |  WAN: %s  |  Code: %s" % [_lan_ip, _public_ip, enet_code]
 		show_ip_btn.text = "Hide"
 	else:
-		ip_label.text = "IP/Code: ●●●●●●●●●●●"
+		ip_label.text = "IP/Code: ***********"
 		show_ip_btn.text = "Show"
 
 

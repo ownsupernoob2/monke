@@ -224,7 +224,7 @@ func _ready() -> void:
 	# Safety: in multiplayer ensure is_local matches authority even if
 	# setup_network() was somehow missed. Skip if explicitly configured.
 	if not _network_configured:
-		if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
+		if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
 			is_local = is_multiplayer_authority()
 
 	# Create the floating name label shown above every player.
@@ -249,6 +249,7 @@ func _ready() -> void:
 	# Don't show own name label (first-person view; would clutter screen).
 	if has_node("NameLabel3D"):
 		get_node("NameLabel3D").visible = false
+	add_to_group("local_player")
 	camera.make_current()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	torso.visible = false  # first-person: don't render own body
@@ -594,7 +595,11 @@ func _process(delta: float) -> void:
 	# Pulse: flat spike added on a timed release, decays at 40°/s so it lasts
 	#        ~0.45 s — just long enough to register as a camera flick.
 	_fov_pulse = maxf(_fov_pulse - delta * 35.0, 0.0)
-	var spd        := velocity.length()
+	var spd := velocity.length()
+	if is_on_floor():
+		spd = Vector2(velocity.x, velocity.z).length()
+	if spd < 0.03:
+		spd = 0.0
 	var t          := clampf(spd / fov_speed_full, 0.0, 1.0)
 	var target_fov := fov_base + (fov_max - fov_base) * t * t + _fov_pulse
 	camera.fov      = lerpf(camera.fov, target_fov, delta * 4.0)

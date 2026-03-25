@@ -32,6 +32,7 @@ var _segs        : Array[MeshInstance3D] = []
 
 var _mat  : StandardMaterial3D
 var _rng  := RandomNumberGenerator.new()
+var _stream_enabled : bool = true
 
 ## Fixed world-space anchor set once in _ready().
 var _anchor : Vector3
@@ -252,6 +253,21 @@ func update_grab_target(target_world_pos: Vector3) -> void:
 ## Release grab influence so the vine swings freely.
 func clear_grab() -> void:
 	_grab_idx = -1
+
+
+func has_active_grab() -> bool:
+	return _grab_idx > 0
+
+
+func set_stream_enabled(enabled: bool) -> void:
+	if _stream_enabled == enabled:
+		return
+	_stream_enabled = enabled
+	visible = enabled
+	set_physics_process(enabled)
+	for link in _links:
+		if link:
+			link.collision_layer = 2 if enabled else 0
 
 
 ## World position of chain node i.

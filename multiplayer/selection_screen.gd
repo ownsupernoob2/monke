@@ -246,7 +246,7 @@ func _randomise_offerings() -> void:
 	offered_buffs = _normalize_three_offers(offered_buffs, ALL_BUFFS)
 
 
-func _reroll_buff_offerings_for_gamemode(gamemode: String) -> void:
+func _reroll_buff_offerings_for_gamemode(_gamemode: String) -> void:
 	var buff_pool := ALL_BUFFS.duplicate()
 	buff_pool.shuffle()
 	offered_buffs.clear()

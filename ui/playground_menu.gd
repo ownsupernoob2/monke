@@ -69,6 +69,8 @@ func _on_start() -> void:
 		gs.hunger_enabled         = hunger_toggle.button_pressed
 		gs.ground_enemies_enabled = enemies_toggle.button_pressed
 		gs.selected_map           = MAPS[_selected_card_name]
+	if has_node("/root/GameLobby"):
+		await get_node("/root/GameLobby").disconnect_lobby_async()
 
 	get_tree().change_scene_to_file(MAPS[_selected_card_name])
 

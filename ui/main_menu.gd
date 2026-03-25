@@ -1,8 +1,8 @@
 extends Node3D
 
 ## 3D main menu with SubViewport-rendered cards and camera transitions.
-## The monkey spins beside the main menu card.  Clicking Settings or
-## Customize tweens the camera to their respective 3D sections.
+## The monkey spins beside the main menu card.  Cosmetic arrows sit beside
+## the monkey and are clickable from the main section.
 
 const SPIN_SPEED := 0.5
 const MONKEY_BOB_AMPLITUDE := 0.16
@@ -14,14 +14,13 @@ const CARD_FLOAT_SPEED := 0.9
 const FIREFLY_COUNT := 18
 
 # ── Section layout ────────────────────────────────────────────────────────────
-enum Section { TITLE, MAIN, SETTINGS, CUSTOMIZE }
+enum Section { TITLE, MAIN, SETTINGS }
 
 # Camera pivot target Y-rotation for each section.
 const CAM_Y := {
 	Section.TITLE:     0.0,
 	Section.MAIN:      0.0,
 	Section.SETTINGS:  PI / 2.0,
-	Section.CUSTOMIZE: PI,
 }
 
 # Card world positions and facing rotations.
@@ -29,13 +28,11 @@ const CARD_POS := {
 	Section.TITLE:     Vector3(-4.0, 0, -3),
 	Section.MAIN:      Vector3(1.5, 0, -5),
 	Section.SETTINGS:  Vector3(-5, 0, 0),
-	Section.CUSTOMIZE: Vector3(0, 0, 5),
 }
 const CARD_ROT_Y := {
 	Section.TITLE:     PI * 0.75,
 	Section.MAIN:      PI,
 	Section.SETTINGS:  PI / 2.0,
-	Section.CUSTOMIZE: 0.0,
 }
 
 const CARD_VP_SIZE    := Vector2i(560, 760)
@@ -45,6 +42,10 @@ const TITLE_QUAD_SIZE := Vector2(2.8, 3.8)
 const SETTINGS_VP_SIZE := Vector2i(600, 820)
 const SETTINGS_QUAD_SIZE := Vector2(3.4, 4.6)
 const TRANSITION_TIME := 0.8
+const MOUSE_LOOK_SPEED := 8.0
+const MONKE_LOOK_BACK_OFFSET := 0.0
+const MONKE_LOOK_PITCH_MAX := 0.5
+const MONKE_LOOK_DISTANCE := 40.0
 
 # ── State ─────────────────────────────────────────────────────────────────────
 var _current_section := Section.MAIN
@@ -58,6 +59,11 @@ var _card_base_y : Dictionary = {}
 var _base_cam_pos : Vector3 = Vector3.ZERO
 var _base_cam_rot_x : float = 0.0
 var _base_monkey_y : float = 0.0
+var _monke_visual : Node3D = null
+var _hat_index : int = 0
+var _face_index : int = 0
+var _monke_neutral_rot_x : float = 0.0
+var _monke_neutral_rot_y : float = 0.0
 
 # ── .tscn references ─────────────────────────────────────────────────────────
 @onready var camera_pivot         := $CameraPivot
@@ -65,7 +71,6 @@ var _base_monkey_y : float = 0.0
 @onready var _title_card_node     : Node3D = get_node_or_null("TitleCard") as Node3D
 @onready var _main_card_node      : Node3D = get_node_or_null("MainCard") as Node3D
 @onready var _settings_card_node  : Node3D = get_node_or_null("SettingsCard") as Node3D
-@onready var _customize_card_node : Node3D = get_node_or_null("CustomizeCard") as Node3D
 
 # ── Settings widgets (populated during build) ────────────────────────────────
 var _master_slider     : HSlider  = null
@@ -83,15 +88,13 @@ func _ready() -> void:
 	_title_card_node = _ensure_card_node(_title_card_node, Section.TITLE, TITLE_VP_SIZE, TITLE_QUAD_SIZE)
 	_main_card_node = _ensure_card_node(_main_card_node, Section.MAIN, CARD_VP_SIZE, CARD_QUAD_SIZE)
 	_settings_card_node = _ensure_card_node(_settings_card_node, Section.SETTINGS, SETTINGS_VP_SIZE, SETTINGS_QUAD_SIZE)
-	_customize_card_node = _ensure_card_node(_customize_card_node, Section.CUSTOMIZE, CARD_VP_SIZE, CARD_QUAD_SIZE)
 	_setup_monkey()
 	_build_title_card()
 	_build_main_card()
 	_build_settings_card()
-	_build_customize_card()
+	_build_main_cosmetic_arrows()
 	_setup_card_idle_bases()
 	_build_ambient_fx()
-	_build_arrow_buttons()
 	_build_version_label()
 	_base_cam_pos = camera_pivot.position
 	_base_cam_rot_x = camera_pivot.rotation.x
@@ -107,6 +110,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_fx_time += delta
 	monkey_pivot.position.y = _base_monkey_y + sin(_fx_time * MONKEY_BOB_SPEED) * MONKEY_BOB_AMPLITUDE
+	_update_monkey_mouse_look(delta)
 
 	# Subtle camera breathing to keep the scene alive.
 	camera_pivot.position.y = _base_cam_pos.y + sin(_fx_time * CAM_IDLE_SPEED) * CAM_IDLE_BOB
@@ -144,6 +148,10 @@ func _setup_monkey() -> void:
 		return
 	var monke := monke_scene.instantiate()
 	monkey_pivot.add_child(monke)
+	if monke is Node3D:
+		_monke_visual = monke as Node3D
+		_monke_neutral_rot_x = _monke_visual.rotation.x
+		_monke_neutral_rot_y = _monke_visual.rotation.y
 	var tex := load("res://models/monke_texture.png") as Texture2D
 	if tex:
 		for child in monke.get_children():
@@ -152,12 +160,84 @@ func _setup_monkey() -> void:
 				mat.albedo_texture = tex
 				mat.roughness = 0.5
 				child.material_override = mat
+	_apply_customize_visuals()
+
+
+func _apply_customize_visuals() -> void:
+	_set_scene_cosmetic_visibility("Hats", _hat_index)
+	_set_scene_cosmetic_visibility("Bodies", _face_index)
+
+
+func _set_scene_cosmetic_visibility(group_name: String, visible_index: int) -> void:
+	if _monke_visual == null:
+		return
+	var group := _monke_visual.get_node_or_null("Cosmetics/%s" % group_name)
+	if group == null:
+		return
+	var i := 0
+	for child in group.get_children():
+		if child is Node3D:
+			(child as Node3D).visible = (i == visible_index)
+			i += 1
+
+
+func _scene_cosmetic_count(group_name: String) -> int:
+	if _monke_visual == null:
+		return 0
+	var group := _monke_visual.get_node_or_null("Cosmetics/%s" % group_name)
+	if group == null:
+		return 0
+	var count := 0
+	for child in group.get_children():
+		if child is Node3D:
+			count += 1
+	return count
+
+
+func _update_monkey_mouse_look(delta: float) -> void:
+	if _monke_visual == null:
+		return
+	var cam := camera_pivot.get_node_or_null("Camera3D") as Camera3D
+	if cam == null:
+		return
+	var vp := get_viewport()
+	if vp == null:
+		return
+	var head_world := _monke_visual.global_position + Vector3(0.0, 1.2, 0.0)
+	if cam.is_position_behind(head_world):
+		return
+
+	# Anchor neutral gaze to the monkey's on-screen position so the cursor over
+	# the monkey yields straight-ahead look regardless of where the monkey sits.
+	var anchor_screen := cam.unproject_position(head_world)
+	var mouse_pos := vp.get_mouse_position()
+	var from := cam.project_ray_origin(mouse_pos)
+	var dir := cam.project_ray_normal(mouse_pos).normalized()
+	var aim_point := from + dir * MONKE_LOOK_DISTANCE
+
+	var anchor_from := cam.project_ray_origin(anchor_screen)
+	var anchor_dir := cam.project_ray_normal(anchor_screen).normalized()
+	var anchor_point := anchor_from + anchor_dir * MONKE_LOOK_DISTANCE
+
+	var to_target := aim_point - _monke_visual.global_position
+	if to_target.length_squared() < 0.0001:
+		return
+
+	var target_basis := _monke_visual.global_transform.looking_at(aim_point, Vector3.UP).basis
+	var target_euler := target_basis.get_euler()
+	var anchor_basis := _monke_visual.global_transform.looking_at(anchor_point, Vector3.UP).basis
+	var anchor_euler := anchor_basis.get_euler()
+	var delta_y : float = target_euler.y - anchor_euler.y
+	var delta_x : float = target_euler.x - anchor_euler.x
+	var target_y : float = _monke_neutral_rot_y - delta_y + MONKE_LOOK_BACK_OFFSET
+	var target_x : float = clampf(_monke_neutral_rot_x - delta_x, -MONKE_LOOK_PITCH_MAX, MONKE_LOOK_PITCH_MAX)
+	_monke_visual.rotation.x = lerpf(_monke_visual.rotation.x, target_x, delta * MOUSE_LOOK_SPEED)
+	_monke_visual.rotation.y = lerp_angle(_monke_visual.rotation.y, target_y, delta * MOUSE_LOOK_SPEED)
 
 
 func _setup_card_idle_bases() -> void:
 	_card_base_y[Section.MAIN] = _main_card_node.position.y
 	_card_base_y[Section.SETTINGS] = _settings_card_node.position.y
-	_card_base_y[Section.CUSTOMIZE] = _customize_card_node.position.y
 
 
 func _build_ambient_fx() -> void:
@@ -513,43 +593,65 @@ func _apply_settings() -> void:
 		gs._apply_display()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  CUSTOMIZE CARD
-# ══════════════════════════════════════════════════════════════════════════════
+func _build_main_cosmetic_arrows() -> void:
+	var arrow_specs := [
+		{"pos": Vector3(-1.75, 0.9, 0.0), "model_type": "hat", "dir": -1, "label": "<"},
+		{"pos": Vector3(1.75, 0.9, 0.0), "model_type": "hat", "dir": 1, "label": ">"},
+		{"pos": Vector3(-1.75, -0.9, 0.0), "model_type": "face", "dir": -1, "label": "<"},
+		{"pos": Vector3(1.75, -0.9, 0.0), "model_type": "face", "dir": 1, "label": ">"},
+	]
 
-func _build_customize_card() -> void:
-	var info := _use_card(Section.CUSTOMIZE, _customize_card_node)
-	var vp : SubViewport = info.viewport
+	for spec in arrow_specs:
+		var card := Node3D.new()
+		card.position = spec.pos
+		monkey_pivot.add_child(card)
 
-	var bg := ColorRect.new()
-	bg.color = Color(0.05, 0.1, 0.04)
-	bg.size = Vector2(vp.size)
-	vp.add_child(bg)
+		var vp := SubViewport.new()
+		vp.name = "VP"
+		vp.size = Vector2i(92, 92)
+		vp.transparent_bg = true
+		vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		card.add_child(vp)
 
-	var vbox := VBoxContainer.new()
-	vbox.size = Vector2(vp.size)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 20)
-	vp.add_child(vbox)
+		var btn := Button.new()
+		btn.text = str(spec.label)
+		btn.custom_minimum_size = Vector2(92, 92)
+		btn.add_theme_font_size_override("font_size", 38)
+		btn.add_theme_color_override("font_color", Color(0.9, 0.78, 0.25))
 
-	var title := Label.new()
-	title.text = "CUSTOMIZE"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 46)
-	title.add_theme_color_override("font_color", Color(0.9, 0.78, 0.25))
-	vbox.add_child(title)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.12, 0.28, 0.10, 0.9)
+		sb.border_color = Color(0.35, 0.72, 0.28)
+		sb.set_border_width_all(2)
+		sb.set_corner_radius_all(10)
+		btn.add_theme_stylebox_override("normal", sb)
 
-	var coming := Label.new()
-	coming.text = "Coming Soon..."
-	coming.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	coming.add_theme_font_size_override("font_size", 26)
-	coming.add_theme_color_override("font_color", Color(0.7, 0.75, 0.65, 0.7))
-	vbox.add_child(coming)
+		var hover := sb.duplicate() as StyleBoxFlat
+		hover.bg_color = Color(0.18, 0.44, 0.14, 0.96)
+		hover.border_color = Color(0.50, 0.92, 0.38)
+		btn.add_theme_stylebox_override("hover", hover)
+		btn.add_theme_stylebox_override("focus", hover)
 
-	_spacer(vbox, 30)
+		btn.pressed.connect(func(): _cycle_model(str(spec.model_type), int(spec.dir)))
+		vp.add_child(btn)
 
-	_styled_button("BACK", vbox, 24).pressed.connect(
-			func(): _transition_to(Section.MAIN))
+		var mesh_inst := MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2(0.5, 0.5)
+		quad.flip_faces = true
+		mesh_inst.mesh = quad
+		mesh_inst.position.y = 0.25
+		card.add_child(mesh_inst)
+
+		_apply_vp_material(mesh_inst, vp)
+
+		_cards.append({
+			"section": Section.MAIN,
+			"node": card,
+			"viewport": vp,
+			"mesh": mesh_inst,
+			"quad_size": quad.size,
+		})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -603,28 +705,40 @@ func _transition_to(section: Section) -> void:
 # ══════════════════════════════════════════════════════════════════════════════
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _transitioning:
+	var vp := get_viewport()
+	if not vp:
 		return
+	if _route_menu_input(event):
+		vp.set_input_as_handled()
+
+
+func _route_menu_input(event: InputEvent) -> bool:
+	if _transitioning:
+		return false
 
 	# ESC returns to main section from sub-sections.
 	if event.is_action_pressed("ui_cancel") and _current_section != Section.MAIN:
 		if _current_section == Section.SETTINGS:
 			_apply_settings()
 		_transition_to(Section.MAIN)
-		get_viewport().set_input_as_handled()
-		return
+		return true
 
 	if not (event is InputEventMouseButton or event is InputEventMouseMotion):
-		return
+		return false
 
-	for card_info in _cards:
-		if card_info.section != _current_section:
+	if _forward_to_first_hit(event, _cards, _current_section):
+		return true
+
+	return false
+
+
+func _forward_to_first_hit(event: InputEvent, card_list: Array, section_filter := -1) -> bool:
+	for card_info in card_list:
+		if section_filter != -1 and int(card_info.get("section", -1)) != section_filter:
 			continue
 		if _forward_to_card(event, card_info):
-			var vp := get_viewport()
-			if vp:
-				vp.set_input_as_handled()
-		return
+			return true
+	return false
 
 
 func _forward_to_card(event: InputEvent, card_info: Dictionary) -> bool:
@@ -680,7 +794,7 @@ func _forward_to_card(event: InputEvent, card_info: Dictionary) -> bool:
 
 	if not is_instance_valid(vp) or not vp.is_inside_tree() or vp.get_tree() == null:
 		return false
-	vp.call_deferred("push_input", fwd)
+	vp.push_input(fwd)
 	return true
 
 
@@ -689,13 +803,13 @@ func _forward_to_card(event: InputEvent, card_info: Dictionary) -> bool:
 # ══════════════════════════════════════════════════════════════════════════════
 
 func _on_play() -> void:
-	get_tree().change_scene_to_file("res://multiplayer/ConnectScreen.tscn")
+	get_tree().call_deferred("change_scene_to_file", "res://multiplayer/ConnectScreen.tscn")
 
 func _on_tutorial() -> void:
-	get_tree().change_scene_to_file("res://ui/Tutorial.tscn")
+	get_tree().call_deferred("change_scene_to_file", "res://ui/Tutorial.tscn")
 
 func _on_playground() -> void:
-	get_tree().change_scene_to_file("res://ui/PlaygroundMenu.tscn")
+	get_tree().call_deferred("change_scene_to_file", "res://ui/PlaygroundMenu.tscn")
 
 func _on_exit() -> void:
 	get_tree().quit()
@@ -713,70 +827,17 @@ func _show_disconnect_popup(msg: String) -> void:
 	dialog.popup_centered()
 
 
-func _build_arrow_buttons() -> void:
-	## Four small 3D arrow cards positioned around the monkey.
-	## Upper left/right for hats, lower left/right for face/shirt.
-	var arrow_positions := [
-		{"pos": Vector3(-1.8, 0.8, 0.0), "arrow": "◀", "model_type": "hat", "dir": -1},
-		{"pos": Vector3(1.8, 0.8, 0.0), "arrow": "▶", "model_type": "hat", "dir": 1},
-		{"pos": Vector3(-1.8, -0.8, 0.0), "arrow": "◀", "model_type": "face", "dir": -1},
-		{"pos": Vector3(1.8, -0.8, 0.0), "arrow": "▶", "model_type": "face", "dir": 1},
-	]
-	
-	for config in arrow_positions:
-		var card := Node3D.new()
-		card.position = config.pos
-		monkey_pivot.add_child(card)
-		
-		var vp := SubViewport.new()
-		vp.name = "VP"
-		vp.size = Vector2i(80, 80)
-		vp.transparent_bg = true
-		vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-		card.add_child(vp)
-		
-		var btn := Button.new()
-		btn.text = config.arrow
-		btn.custom_minimum_size = Vector2(80, 80)
-		btn.add_theme_font_size_override("font_size", 36)
-		btn.add_theme_color_override("font_color", Color(0.9, 0.78, 0.25))
-		
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.12, 0.28, 0.10, 0.85)
-		sb.border_color = Color(0.35, 0.72, 0.28)
-		sb.set_border_width_all(2)
-		sb.set_corner_radius_all(8)
-		btn.add_theme_stylebox_override("normal", sb)
-		
-		var hover := sb.duplicate() as StyleBoxFlat
-		hover.bg_color = Color(0.18, 0.44, 0.14, 0.95)
-		hover.border_color = Color(0.50, 0.92, 0.38)
-		btn.add_theme_stylebox_override("hover", hover)
-		btn.add_theme_stylebox_override("focus", hover)
-		
-		btn.pressed.connect(func(): _cycle_model(config.model_type, config.dir))
-		vp.add_child(btn)
-		
-		var mesh_inst := MeshInstance3D.new()
-		var quad := QuadMesh.new()
-		quad.size = Vector2(0.4, 0.4)
-		quad.flip_faces = true
-		mesh_inst.mesh = quad
-		mesh_inst.position.y = 0.2
-		card.add_child(mesh_inst)
-		
-		var mat := StandardMaterial3D.new()
-		mat.albedo_texture = vp.get_texture()
-		mat.uv1_scale = Vector3(-1, 1, 1)
-		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		mesh_inst.set_surface_override_material(0, mat)
-
-
-
-
 func _cycle_model(model_type: String, direction: int) -> void:
-	## Placeholder for model cycling logic.
-	## model_type: "hat" or "face" (face includes shirt)
-	## direction: -1 (prev) or 1 (next)
-	print("Cycling %s model in direction %d" % [model_type, direction])
+	if model_type == "hat":
+		var hat_count := _scene_cosmetic_count("Hats")
+		if hat_count <= 0:
+			return
+		_hat_index = posmod(_hat_index + direction, hat_count)
+	elif model_type == "face":
+		var body_count := _scene_cosmetic_count("Bodies")
+		if body_count <= 0:
+			return
+		_face_index = posmod(_face_index + direction, body_count)
+	else:
+		return
+	_apply_customize_visuals()

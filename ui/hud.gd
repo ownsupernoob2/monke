@@ -181,13 +181,13 @@ func set_effects(effects: Array[Dictionary]) -> void:
 		sb.set_content_margin_all(6)
 		card.add_theme_stylebox_override("panel", sb)
 		var lbl := Label.new()
-		var name := str(effect.get("name", "Effect"))
+		var effect_name := str(effect.get("name", "Effect"))
 		var stacks := int(effect.get("stacks", 1))
 		var time_left := float(effect.get("time_left", 0.0))
 		var usage := "Passive"
-		if name == "Wind Rider":
+		if effect_name == "Wind Rider":
 			usage = "MMB"
-		lbl.text = "%s x%d [%s]  %ds" % [name, stacks, usage, maxi(int(ceili(time_left)), 0)]
+		lbl.text = "%s x%d [%s]  %ds" % [effect_name, stacks, usage, maxi(int(ceili(time_left)), 0)]
 		lbl.add_theme_font_size_override("font_size", 15)
 		lbl.add_theme_color_override("font_color", Color(0.92, 0.95, 1.0))
 		card.add_child(lbl)
@@ -217,7 +217,9 @@ func update_alive_count(alive: int) -> void:
 
 func update_game_timer(time_left: float) -> void:
 	if time_left > 0.0:
-		timer_label.text = "%d:%02d" % [int(time_left) / 60, int(time_left) % 60]
+		var total_seconds := int(maxf(time_left, 0.0))
+		var minutes := int(floor(float(total_seconds) / 60.0))
+		timer_label.text = "%d:%02d" % [minutes, total_seconds % 60]
 	else:
 		timer_label.text = ""
 

@@ -9,7 +9,6 @@ const INACTIVITY_FADE  : float = 10.0  ## seconds of inactivity before chat fade
 
 var _is_open        : bool  = false
 var _inactive_timer : float = 0.0
-var _messages : Array[Dictionary] = []  # { "sender": String, "text": String, "time": float }
 
 @onready var chat_container : VBoxContainer = $Panel/Margin/VBox/ScrollContainer/ChatMessages
 @onready var input_field    : LineEdit      = $Panel/Margin/VBox/InputRow/InputField
@@ -111,7 +110,6 @@ func _on_text_submitted(text: String) -> void:
 		_close_chat()
 		return
 	if msg != "" and has_node("/root/GameLobby"):
-		var lobby : Node = get_node("/root/GameLobby")
 		GameLobby.send_chat(msg)
 	_close_chat()
 
@@ -157,10 +155,10 @@ func _handle_command(cmd: String) -> void:
 			_add_alert("Unknown command: %s" % command)
 
 
-func _find_peer_by_name(name: String) -> int:
+func _find_peer_by_name(player_name: String) -> int:
 	# Match against display_name so "Player2" correctly finds the renamed duplicate.
 	for id : int in GameLobby.players:
-		if GameLobby.display_name(id).to_lower() == name.to_lower():
+		if GameLobby.display_name(id).to_lower() == player_name.to_lower():
 			return id
 	return -1
 

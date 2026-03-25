@@ -87,7 +87,7 @@ size = Vector2i(480, 640)
 render_target_update_mode = 3
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="TitleCard" unique_id=4129583]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5206275, 3.0269227, 0.4386139)
+transform = Transform3D(1.8649601, 0, -0.42600262, 0, 1.9129962, 0, 0.42600262, 0, 1.8649601, -3.0235898, 4.4309955, 2.3926578)
 mesh = SubResource("quad_title")
 surface_material_override/0 = SubResource("StandardMaterial3D_title")
 
@@ -115,17 +115,6 @@ render_target_update_mode = 3
 transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, -0.950413, 2.3, -0.45890808)
 mesh = SubResource("quad_settings")
 surface_material_override/0 = SubResource("StandardMaterial3D_settings")
-
-[node name="CustomizeCard" type="Node3D" parent="." unique_id=1292237247]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 5)
-
-[node name="VP" type="SubViewport" parent="CustomizeCard" unique_id=2021751361]
-size = Vector2i(420, 560)
-render_target_update_mode = 3
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="CustomizeCard" unique_id=1245628658]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0895402, 2.1, 1.0167465)
-mesh = SubResource("quad_main")
 
 [node name="DirectionalLight3D2" type="DirectionalLight3D" parent="." unique_id=332597694]
 transform = Transform3D(0.042050075, -7.450581e-09, 0.9991155, -0.9931677, 0.10895293, 0.041799743, -0.10885656, -0.99404705, 0.004581481, 0.07146842, 3.435305, 0.66450703)

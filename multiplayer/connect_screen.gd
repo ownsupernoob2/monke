@@ -21,7 +21,7 @@ extends Control
 @onready var lobby_list     : ItemList = $VBox/JoinPanel/LobbyList
 @onready var join_btn       : Button   = $VBox/JoinPanel/JoinBtn
 
-@onready var lobby : Node = get_node("/root/GameLobby")
+var lobby : Node = null
 var _public_lobbies : Array[Dictionary] = []
 
 # ─ Loading overlay (built at runtime) ─
@@ -103,6 +103,12 @@ func _build_loading_overlay() -> void:
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_ensure_lobby_node()
+	if lobby == null:
+		status_label.text = "Multiplayer failed to initialize (GameLobby missing)."
+		_set_actions_enabled(false)
+		back_btn.disabled = false
+		return
 	_resolve_create_paths()
 	if create_tab_btn:
 		create_tab_btn.pressed.connect(func() -> void: _set_mode_create())
@@ -123,7 +129,7 @@ func _ready() -> void:
 		var gs : Node = get_node("/root/GameSettings")
 		if gs.player_name != "":
 			name_edit.text = gs.player_name
-	name_edit.placeholder_text = "Enter your name…"
+	name_edit.placeholder_text = "Enter your name..."
 	if public_toggle:
 		public_toggle.button_pressed = true
 	_apply_button_styles()
@@ -140,12 +146,31 @@ func _ready() -> void:
 	_on_name_changed(name_edit.text)
 
 
+func _ensure_lobby_node() -> void:
+	lobby = get_node_or_null("/root/GameLobby")
+	if lobby != null:
+		return
+	var lobby_script := load("res://multiplayer/lobby.gd") as Script
+	if lobby_script == null:
+		return
+	var fallback := Node.new()
+	fallback.name = "GameLobby"
+	fallback.set_script(lobby_script)
+	get_tree().root.add_child(fallback)
+	lobby = fallback
+
+
 func _update_ui_for_mode() -> void:
 	if _using_webrtc_transport():
-		status_label.text = "WebRTC mode: enter a room code (requires webrtc_signal_url)."
+		if _web_signaling_configured():
+			status_label.text = "WebRTC mode: create or join with a room code."
+		else:
+			status_label.text = "Web build needs GameSettings.webrtc_signal_url to host/join."
 		address_row.visible = false
 		refresh_btn.visible = false
 		lobby_list.visible = false
+		create_btn.disabled = not _is_valid_name(name_edit.text) or not _web_signaling_configured()
+		join_btn.disabled = not _is_valid_name(name_edit.text) or not _web_signaling_configured()
 		return
 
 	var eos_mode : bool = _eos_available()
@@ -224,6 +249,14 @@ func _is_valid_name(raw: String) -> bool:
 
 func _on_name_changed(new_text: String) -> void:
 	var ok := _is_valid_name(new_text)
+	if _using_webrtc_transport() and not _web_signaling_configured():
+		create_btn.disabled = true
+		join_btn.disabled = true
+		if create_tab_btn:
+			create_tab_btn.disabled = true
+		join_tab_btn.disabled = true
+		status_label.text = "Set GameSettings.webrtc_signal_url for browser multiplayer."
+		return
 	create_btn.disabled = not ok
 	join_btn.disabled = not ok
 	if create_tab_btn:
@@ -492,3 +525,10 @@ func _using_webrtc_transport() -> bool:
 		var gs : Node = get_node("/root/GameSettings")
 		return bool(gs.get("force_webrtc_on_native")) and str(gs.get("webrtc_signal_url")).strip_edges() != ""
 	return false
+
+
+func _web_signaling_configured() -> bool:
+	if not has_node("/root/GameSettings"):
+		return false
+	var gs : Node = get_node("/root/GameSettings")
+	return str(gs.get("webrtc_signal_url")).strip_edges() != ""

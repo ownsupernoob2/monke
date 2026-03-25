@@ -5,6 +5,9 @@ extends Node3D
 
 @onready var spawn_point : Marker3D = $SpawnPoint
 
+const INTERACTABLE_STREAM_RADIUS : float = 35.0
+const INTERACTABLE_STREAM_INTERVAL : float = 0.2
+
 ## Multiplayer: container that holds all player nodes.
 var _players_node : Node3D = null
 
@@ -15,6 +18,9 @@ var _used_spawn_slots : Dictionary = {}
 
 ## Chat overlay instance (multiplayer only).
 var _chat : Node = null
+var _stream_vines : Array[Vine] = []
+var _stream_ziplines : Array[Zipline] = []
+var _stream_tick : float = 0.0
 
 
 func _ready() -> void:
@@ -26,12 +32,24 @@ func _ready() -> void:
 	_players_node.name = "Players"
 	add_child(_players_node)
 
-	if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
+	_cache_stream_interactables()
+
+	if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
 		# Multiplayer mode — spawn one player per connected peer.
 		_setup_multiplayer()
 	else:
 		# Singleplayer fallback.
 		_spawn_local_player()
+
+	_update_interactable_streaming(true)
+
+
+func _process(delta: float) -> void:
+	_stream_tick += delta
+	if _stream_tick < INTERACTABLE_STREAM_INTERVAL:
+		return
+	_stream_tick = 0.0
+	_update_interactable_streaming(false)
 
 
 func _apply_map_vine_style() -> void:
@@ -79,6 +97,12 @@ func _spawn_local_player() -> void:
 # ── Multiplayer ───────────────────────────────────────────────────────────────
 
 func _setup_multiplayer() -> void:
+	if not has_node("/root/GameLobby"):
+		# Defensive fallback: if lobby autoload is unavailable, run local only.
+		_spawn_local_player()
+		return
+	var lobby : Node = get_node("/root/GameLobby")
+
 	# Spawn chat overlay.
 	var chat_scene := load("res://ui/Chat.tscn")
 	if chat_scene:
@@ -86,7 +110,7 @@ func _setup_multiplayer() -> void:
 		add_child(_chat)
 
 	# Spawn for every peer already in the lobby.
-	for peer_id : int in GameLobby.players.keys():
+	for peer_id : int in lobby.players.keys():
 		_spawn_mp_player(peer_id)
 
 	# Fallback: on fast scene transitions, clients can enter the map before
@@ -96,11 +120,11 @@ func _setup_multiplayer() -> void:
 		_spawn_mp_player(local_id)
 
 	# Late-joiners (shouldn't happen mid-game, but safe).
-	GameLobby.player_joined.connect(func(_id : int, _n : String) -> void: _spawn_mp_player(_id))
-	GameLobby.player_left.connect(_on_peer_left)
+	lobby.player_joined.connect(func(_id : int, _n : String) -> void: _spawn_mp_player(_id))
+	lobby.player_left.connect(_on_peer_left)
 
 	# Host-disconnect for clients.
-	GameLobby.server_closed.connect(_on_server_closed)
+	lobby.server_closed.connect(_on_server_closed)
 
 	# Spawn gamemode manager if applicable.
 	_spawn_gamemode_manager()
@@ -196,8 +220,11 @@ func _assign_spawn_slot(peer_id: int, slot_count: int) -> int:
 
 
 func _sorted_peer_index(peer_id: int) -> int:
+	if not has_node("/root/GameLobby"):
+		return 0
+	var lobby : Node = get_node("/root/GameLobby")
 	var ids: Array[int] = []
-	for id_variant in GameLobby.players.keys():
+	for id_variant in lobby.players.keys():
 		ids.append(int(id_variant))
 	if not ids.has(peer_id):
 		ids.append(peer_id)
@@ -275,3 +302,51 @@ func _spawn_gamemode_manager() -> void:
 		lps.name = "LPSManager"
 		lps.set_script(lps_script)
 		add_child(lps)
+
+
+func _cache_stream_interactables() -> void:
+	_stream_vines.clear()
+	_stream_ziplines.clear()
+	for node in find_children("*", "Vine", true, false):
+		var vine := node as Vine
+		if vine:
+			_stream_vines.append(vine)
+	for node in find_children("*", "Zipline", true, false):
+		var zipline := node as Zipline
+		if zipline:
+			_stream_ziplines.append(zipline)
+
+
+func _local_player_position() -> Vector3:
+	for node in _players_node.get_children():
+		var player := node as Player
+		if player and player.is_local:
+			return player.global_position
+	return Vector3.INF
+
+
+func _update_interactable_streaming(force: bool) -> void:
+	var player_pos := _local_player_position()
+	if player_pos == Vector3.INF:
+		if force:
+			for vine in _stream_vines:
+				if vine:
+					vine.set_stream_enabled(true)
+			for zipline in _stream_ziplines:
+				if zipline:
+					zipline.set_stream_enabled(true)
+		return
+
+	var radius_sq := INTERACTABLE_STREAM_RADIUS * INTERACTABLE_STREAM_RADIUS
+	for vine in _stream_vines:
+		if vine == null:
+			continue
+		var near := vine.global_position.distance_squared_to(player_pos) <= radius_sq
+		var keep_active := near or vine.has_active_grab()
+		vine.set_stream_enabled(keep_active)
+
+	for zipline in _stream_ziplines:
+		if zipline == null:
+			continue
+		var near := zipline.global_position.distance_squared_to(player_pos) <= radius_sq
+		zipline.set_stream_enabled(near)

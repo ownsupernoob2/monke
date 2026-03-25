@@ -22,6 +22,9 @@ var direction : Vector3 = Vector3.RIGHT
 var start_pos : Vector3 = Vector3.ZERO
 var end_pos   : Vector3 = Vector3.ZERO
 var length    : float   = 1.0
+var _visual_mesh : MeshInstance3D = null
+var _grab_body : StaticBody3D = null
+var _stream_enabled : bool = true
 
 
 func _ready() -> void:
@@ -55,6 +58,7 @@ func _build_visual() -> void:
 	var local_dir         := end_marker.position.normalized()
 	mi.transform           = Transform3D(_basis_from_dir(local_dir), end_marker.position * 0.5)
 	add_child(mi)
+	_visual_mesh = mi
 
 
 func _build_grab() -> void:
@@ -74,6 +78,18 @@ func _build_grab() -> void:
 	# Back-reference so Player can recover this Zipline when a hit is detected.
 	body.set_meta("zipline", self)
 	add_child(body)
+	_grab_body = body
+
+
+func set_stream_enabled(enabled: bool) -> void:
+	if _stream_enabled == enabled:
+		return
+	_stream_enabled = enabled
+	visible = enabled
+	if _visual_mesh:
+		_visual_mesh.visible = enabled
+	if _grab_body:
+		_grab_body.collision_layer = 4 if enabled else 0
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
