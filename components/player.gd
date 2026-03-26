@@ -253,6 +253,7 @@ func _ready() -> void:
 	camera.make_current()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	torso.visible = false  # first-person: don't render own body
+	_update_local_cosmetics_visibility()
 	_default_cam_pos = camera.position
 
 	# Register shift-lock input action (Q key).
@@ -345,6 +346,7 @@ func _input(event: InputEvent) -> void:
 		_shift_lock = not _shift_lock
 		camera.position = SHIFT_LOCK_CAM_OFFSET if _shift_lock else _default_cam_pos
 		torso.visible = _shift_lock
+		_update_local_cosmetics_visibility()
 		if _buff_outline and is_instance_valid(_buff_outline):
 			_buff_outline.visible = _shift_lock
 		if is_inside_tree():
@@ -389,6 +391,14 @@ func _input(event: InputEvent) -> void:
 				_right_dtap_timer = 0.0
 			else:
 				_right_dtap_timer = DTAP_WINDOW
+
+
+func _update_local_cosmetics_visibility() -> void:
+	if not is_local:
+		return
+	var cosmetics_root := get_node_or_null("Head/Cosmetics") as Node3D
+	if cosmetics_root:
+		cosmetics_root.visible = _shift_lock
 
 
 func _physics_process(delta: float) -> void:
@@ -1498,6 +1508,7 @@ func die() -> void:
 		_shift_lock = false
 		camera.position = _default_cam_pos
 		torso.visible = false
+		_update_local_cosmetics_visibility()
 	if is_local:
 		combo_changed.emit(_combo)
 	if _left_poo_visual:

@@ -60,8 +60,9 @@ var _base_cam_pos : Vector3 = Vector3.ZERO
 var _base_cam_rot_x : float = 0.0
 var _base_monkey_y : float = 0.0
 var _monke_visual : Node3D = null
-var _hat_index : int = 0
+var _hat_index : int = -1
 var _face_index : int = 0
+var _suit_index : int = -1
 var _monke_neutral_rot_x : float = 0.0
 var _monke_neutral_rot_y : float = 0.0
 
@@ -150,6 +151,7 @@ func _setup_monkey() -> void:
 	monkey_pivot.add_child(monke)
 	if monke is Node3D:
 		_monke_visual = monke as Node3D
+		_sync_preview_cosmetics_from_player_scene()
 		_monke_neutral_rot_x = _monke_visual.rotation.x
 		_monke_neutral_rot_y = _monke_visual.rotation.y
 	var tex := load("res://models/monke_texture.png") as Texture2D
@@ -163,15 +165,94 @@ func _setup_monkey() -> void:
 	_apply_customize_visuals()
 
 
+func _sync_preview_cosmetics_from_player_scene() -> void:
+	if _monke_visual == null:
+		return
+
+	var dst_cosmetics := _preview_cosmetics_root()
+	if dst_cosmetics == null:
+		return
+
+	var player_scene := load("res://components/Player.tscn") as PackedScene
+	if player_scene == null:
+		return
+
+	var player_preview := player_scene.instantiate()
+	if player_preview == null:
+		return
+
+	var src_cosmetics := player_preview.get_node_or_null("Head/Cosmetics") as Node3D
+	if src_cosmetics == null:
+		src_cosmetics = player_preview.get_node_or_null("Cosmetics") as Node3D
+	if src_cosmetics == null:
+		player_preview.queue_free()
+		return
+
+	for group_name in ["Hats", "Suits", "Bodies"]:
+		var src_group := src_cosmetics.get_node_or_null(group_name) as Node3D
+		if src_group == null:
+			continue
+
+		var dst_group := dst_cosmetics.get_node_or_null(group_name) as Node3D
+		if dst_group == null:
+			dst_group = Node3D.new()
+			dst_group.name = group_name
+			dst_cosmetics.add_child(dst_group)
+
+		for old_child in dst_group.get_children():
+			old_child.queue_free()
+
+		for src_child in src_group.get_children():
+			if src_child is Node3D:
+				var copied := (src_child as Node3D).duplicate()
+				copied.visible = false
+				dst_group.add_child(copied)
+
+	var hat_count := _scene_cosmetic_count("Hats")
+	if hat_count > 0 and (_hat_index < 0 or _hat_index >= hat_count):
+		_hat_index = 0
+	var suit_count := _scene_cosmetic_count("Suits")
+	if suit_count > 0 and _suit_index >= suit_count:
+		_suit_index = 0
+
+	player_preview.queue_free()
+
+
+func _preview_cosmetics_root() -> Node3D:
+	if _monke_visual == null:
+		return null
+
+	var head_node := _monke_visual.get_node_or_null("Head") as Node3D
+	if head_node == null:
+		head_node = _monke_visual.find_child("Head", true, false) as Node3D
+
+	if head_node != null:
+		var head_cosmetics := head_node.get_node_or_null("Cosmetics") as Node3D
+		if head_cosmetics == null:
+			head_cosmetics = Node3D.new()
+			head_cosmetics.name = "Cosmetics"
+			head_node.add_child(head_cosmetics)
+		return head_cosmetics
+
+	var root_cosmetics := _monke_visual.get_node_or_null("Cosmetics") as Node3D
+	if root_cosmetics == null:
+		root_cosmetics = Node3D.new()
+		root_cosmetics.name = "Cosmetics"
+		_monke_visual.add_child(root_cosmetics)
+	return root_cosmetics
+
+
 func _apply_customize_visuals() -> void:
 	_set_scene_cosmetic_visibility("Hats", _hat_index)
 	_set_scene_cosmetic_visibility("Bodies", _face_index)
+	_set_scene_cosmetic_visibility("Suits", _suit_index)
 
 
 func _set_scene_cosmetic_visibility(group_name: String, visible_index: int) -> void:
-	if _monke_visual == null:
+	var cosmetics_root := _preview_cosmetics_root()
+	if cosmetics_root == null:
 		return
-	var group := _monke_visual.get_node_or_null("Cosmetics/%s" % group_name)
+	var group := cosmetics_root.get_node_or_null(group_name)
 	if group == null:
 		return
 	var i := 0
@@ -182,9 +263,10 @@ func _set_scene_cosmetic_visibility(group_name: String, visible_index: int) -> v
 
 
 func _scene_cosmetic_count(group_name: String) -> int:
-	if _monke_visual == null:
+	var cosmetics_root := _preview_cosmetics_root()
+	if cosmetics_root == null:
 		return 0
-	var group := _monke_visual.get_node_or_null("Cosmetics/%s" % group_name)
+	var group := cosmetics_root.get_node_or_null(group_name)
 	if group == null:
 		return 0
 	var count := 0
@@ -595,10 +677,11 @@ func _apply_settings() -> void:
 
 func _build_main_cosmetic_arrows() -> void:
 	var arrow_specs := [
-		{"pos": Vector3(-1.75, 0.9, 0.0), "model_type": "hat", "dir": -1, "label": "<"},
-		{"pos": Vector3(1.75, 0.9, 0.0), "model_type": "hat", "dir": 1, "label": ">"},
-		{"pos": Vector3(-1.75, -0.9, 0.0), "model_type": "face", "dir": -1, "label": "<"},
-		{"pos": Vector3(1.75, -0.9, 0.0), "model_type": "face", "dir": 1, "label": ">"},
+		# Labels are intentionally flipped because the card UV is mirrored.
+		{"pos": Vector3(-1.95, 1.22, 0.22), "model_type": "hat", "dir": -1, "label": ">"},
+		{"pos": Vector3(1.95, 1.22, 0.22), "model_type": "hat", "dir": 1, "label": "<"},
+		{"pos": Vector3(-1.95, -0.28, 0.22), "model_type": "suit", "dir": -1, "label": ">"},
+		{"pos": Vector3(1.95, -0.28, 0.22), "model_type": "suit", "dir": 1, "label": "<"},
 	]
 
 	for spec in arrow_specs:
@@ -832,7 +915,20 @@ func _cycle_model(model_type: String, direction: int) -> void:
 		var hat_count := _scene_cosmetic_count("Hats")
 		if hat_count <= 0:
 			return
-		_hat_index = posmod(_hat_index + direction, hat_count)
+		# Include one additional "empty" slot at index -1.
+		var hat_total := hat_count + 1
+		var hat_state := _hat_index + 1
+		hat_state = posmod(hat_state + direction, hat_total)
+		_hat_index = hat_state - 1
+	elif model_type == "suit":
+		var suit_count := _scene_cosmetic_count("Suits")
+		if suit_count <= 0:
+			return
+		# Include one additional "empty" slot at index -1.
+		var suit_total := suit_count + 1
+		var suit_state := _suit_index + 1
+		suit_state = posmod(suit_state + direction, suit_total)
+		_suit_index = suit_state - 1
 	elif model_type == "face":
 		var body_count := _scene_cosmetic_count("Bodies")
 		if body_count <= 0:

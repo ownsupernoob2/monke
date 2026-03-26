@@ -81,9 +81,13 @@ func _spawn_local_player() -> void:
 	if player_scene == null:
 		push_error("Main: 'player_scene' export is not assigned.")
 		return
-	var player : Player = player_scene.instantiate() as Player
+	var player_instance := player_scene.instantiate()
+	if player_instance == null:
+		push_error("Main: player_scene.instantiate() failed.")
+		return
+	var player : Player = player_instance as Player
 	if player == null:
-		push_error("Main: player_scene.instantiate() returned null – check Player.tscn.")
+		push_error("Main: Instanced root is not Player (missing script/class on Player.tscn root).")
 		return
 	# Explicitly mark as local BEFORE add_child so _ready() sees is_local = true.
 	player.setup_network(true)
@@ -137,7 +141,14 @@ func _spawn_mp_player(peer_id : int) -> void:
 		push_error("Main: 'player_scene' export is not assigned.")
 		return
 
-	var player : Player = player_scene.instantiate() as Player
+	var player_instance := player_scene.instantiate()
+	if player_instance == null:
+		push_error("Main: player_scene.instantiate() failed for peer %d." % peer_id)
+		return
+	var player : Player = player_instance as Player
+	if player == null:
+		push_error("Main: Instanced root is not Player for peer %d (missing script/class on Player.tscn root)." % peer_id)
+		return
 	player.name = "Player_%d" % peer_id
 
 	# Decide local vs puppet BEFORE adding to tree – _ready() reads is_local.
