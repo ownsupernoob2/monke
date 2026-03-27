@@ -859,9 +859,16 @@ func _rpc_start_game() -> void:
 func _register_self() -> void:
 	var my_id : int = multiplayer.get_unique_id()
 	var my_name : String = get_local_name()
+	var h_idx : int = -1
+	var s_idx : int = -1
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		h_idx = gs.hat_index
+		s_idx = gs.suit_index
+
 	if is_host():
 		my_name = _unique_name_for(my_id, my_name)
-	players[my_id] = { "name": my_name }
+	players[my_id] = { "name": my_name, "hat_index": h_idx, "suit_index": s_idx }
 	player_joined.emit(my_id, my_name)
 	if is_host():
 		_prune_stale_players_host()
@@ -889,7 +896,8 @@ func _unique_name_for(id: int, base: String) -> String:
 func _on_connected() -> void:
 	_register_self()
 	# Broadcast our name to all existing peers.
-	rpc("_rpc_register_player", multiplayer.get_unique_id(), get_local_name())
+	var info = players[multiplayer.get_unique_id()]
+	rpc("_rpc_register_player", multiplayer.get_unique_id(), info["name"], info.get("hat_index", -1), info.get("suit_index", -1))
 	request_match_state()
 	connected.emit()
 
@@ -943,7 +951,10 @@ func _on_peer_connected(id: int) -> void:
 	# Tell the new peer about ALL currently connected players so they can
 	# populate their lobby view completely (not just the host).
 	for existing_id : int in players.keys():
-		rpc_id(id, "_rpc_register_player", existing_id, players[existing_id]["name"])
+		var pinfo = players[existing_id]
+		var hidx = pinfo.get("hat_index", -1)
+		var sidx = pinfo.get("suit_index", -1)
+		rpc_id(id, "_rpc_register_player", existing_id, pinfo["name"], hidx, sidx)
 	# Keep room-code/lobby-id authoritative from host so everyone sees the same value.
 	rpc_id(id, "_rpc_sync_lobby_identity", current_lobby_id, current_short_code)
 	# Also sync current match state so late-joiners can route directly into a live game.
@@ -971,16 +982,18 @@ func display_name(pid: int) -> String:
 
 
 @rpc("any_peer", "reliable")
-func _rpc_register_player(id: int, p_name: String) -> void:
+func _rpc_register_player(id: int, p_name: String, h_idx: int = -1, s_idx: int = -1) -> void:
 	if is_host():
 		var was_new : bool = not players.has(id)
 		var unique_name : String = _unique_name_for(id, p_name)
 		if was_new:
-			players[id] = { "name": unique_name }
+			players[id] = { "name": unique_name, "hat_index": h_idx, "suit_index": s_idx }
 			player_joined.emit(id, unique_name)
 		else:
 			var prev_name : String = str(players[id]["name"])
 			players[id]["name"] = unique_name
+			players[id]["hat_index"] = h_idx
+			players[id]["suit_index"] = s_idx
 			if prev_name != unique_name:
 				player_renamed.emit(id, unique_name)
 		if unique_name != p_name:
@@ -991,7 +1004,7 @@ func _rpc_register_player(id: int, p_name: String) -> void:
 	# Clients trust host snapshot; this keeps local state responsive until sync arrives.
 	var is_new : bool = not players.has(id)
 	if is_new:
-		players[id] = { "name": p_name }
+		players[id] = { "name": p_name, "hat_index": h_idx, "suit_index": s_idx }
 		player_joined.emit(id, p_name)
 		return
 	var prev_client_name : String = str(players[id]["name"])
@@ -1015,7 +1028,12 @@ func _broadcast_player_snapshot() -> void:
 	_prune_stale_players_host()
 	var snapshot : Dictionary = {}
 	for pid : int in players.keys():
-		snapshot[pid] = str(players[pid]["name"])
+		var info = players[pid]
+		snapshot[pid] = {
+			"name": str(info["name"]),
+			"hat_index": info.get("hat_index", -1),
+			"suit_index": info.get("suit_index", -1)
+		}
 	rpc("_rpc_sync_players", snapshot)
 	_rpc_sync_players(snapshot)
 	rpc("_rpc_sync_lobby_identity", current_lobby_id, current_short_code)
@@ -1067,26 +1085,39 @@ func _prune_stale_players_host() -> void:
 func _rpc_sync_players(snapshot: Dictionary) -> void:
 	if not _accept_host_rpc_sender():
 		return
-	var incoming : Dictionary = {}
-	for key in snapshot.keys():
-		var pid : int = int(key)
-		incoming[pid] = str(snapshot[key])
-
+		
 	var to_remove : Array[int] = []
 	for pid : int in players.keys():
-		if not incoming.has(pid):
+		if not snapshot.has(pid) and not snapshot.has(str(pid)):
 			to_remove.append(pid)
 	for pid in to_remove:
 		players.erase(pid)
 		player_left.emit(pid)
 
-	for pid : int in incoming.keys():
-		var final_name : String = str(incoming[pid])
+	for key in snapshot.keys():
+		var pid : int = int(key)
+		var s_data = snapshot[key]
+		var final_name : String
+		var h_idx : int = -1
+		var s_idx : int = -1
+		
+		# Handle both new dict format and old string format
+		if typeof(s_data) == TYPE_DICTIONARY:
+			final_name = str(s_data.get("name", ""))
+			h_idx = int(s_data.get("hat_index", -1))
+			s_idx = int(s_data.get("suit_index", -1))
+		else:
+			final_name = str(s_data)
+			
 		if not players.has(pid):
-			players[pid] = { "name": final_name }
+			players[pid] = { "name": final_name, "hat_index": h_idx, "suit_index": s_idx }
 			player_joined.emit(pid, final_name)
 			continue
+			
 		var old_name : String = str(players[pid]["name"])
+		players[pid]["hat_index"] = h_idx
+		players[pid]["suit_index"] = s_idx
+		
 		if old_name != final_name:
 			players[pid]["name"] = final_name
 			player_renamed.emit(pid, final_name)

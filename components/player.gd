@@ -221,6 +221,14 @@ signal speed_changed(speed: float)
 
 
 func _ready() -> void:
+	# Avoid running gameplay setup if we are just a mannequin in the main menu
+	var current_scene := get_tree().current_scene
+	if current_scene and current_scene.name == "MainMenu":
+		set_process(false)
+		set_physics_process(false)
+		set_process_input(false)
+		return
+
 	# Safety: in multiplayer ensure is_local matches authority even if
 	# setup_network() was somehow missed. Skip if explicitly configured.
 	if not _network_configured:
@@ -229,6 +237,7 @@ func _ready() -> void:
 
 	# Create the floating name label shown above every player.
 	_create_name_label()
+	_apply_networked_cosmetics()
 
 	if not is_local:
 		# This is a remote puppet — remove input, camera, HUD, raycasts entirely.
@@ -336,6 +345,34 @@ func _create_name_label() -> void:
 		name_lbl.text = "Player %d" % peer_id
 	add_child(name_lbl)
 
+func _apply_networked_cosmetics() -> void:
+	var peer_id : int = get_multiplayer_authority()
+	var h_idx : int = -1
+	var s_idx : int = -1
+	
+	if is_local and has_node("/root/GameSettings"):
+		h_idx = GameSettings.hat_index
+		s_idx = GameSettings.suit_index
+	elif has_node("/root/GameLobby"):
+		if GameLobby.players.has(peer_id):
+			var pdata = GameLobby.players[peer_id]
+			if typeof(pdata) == TYPE_DICTIONARY:
+				h_idx = int(pdata.get("hat_index", -1))
+				s_idx = int(pdata.get("suit_index", -1))
+				
+	var hats_node = get_node_or_null("Torso/Cosmetics/Hats")
+	if hats_node:
+		var hats = hats_node.get_children()
+		for i in range(hats.size()):
+			if hats[i] is Node3D:
+				hats[i].visible = (i == h_idx)
+				
+	var suits_node = get_node_or_null("Torso/Cosmetics/Suits")
+	if suits_node:
+		var suits = suits_node.get_children()
+		for i in range(suits.size()):
+			if suits[i] is Node3D:
+				suits[i].visible = (i == s_idx)
 
 func _input(event: InputEvent) -> void:
 	if not is_local or is_dead:
@@ -396,7 +433,7 @@ func _input(event: InputEvent) -> void:
 func _update_local_cosmetics_visibility() -> void:
 	if not is_local:
 		return
-	var cosmetics_root := get_node_or_null("Head/Cosmetics") as Node3D
+	var cosmetics_root := get_node_or_null("Torso/Cosmetics") as Node3D
 	if cosmetics_root:
 		cosmetics_root.visible = _shift_lock
 
@@ -427,6 +464,8 @@ func _physics_process(delta: float) -> void:
 			else:
 				left_hand.update_grab_pos(_net_left_grab_pos)
 			left_hand_state = HandState.GRABBING
+			if _left_vine:
+				_left_vine.update_grab_target(_net_left_grab_pos)
 		elif left_hand_state == HandState.GRABBING:
 			left_hand.release()
 			left_hand_state = HandState.FREE
@@ -436,6 +475,8 @@ func _physics_process(delta: float) -> void:
 			else:
 				right_hand.update_grab_pos(_net_right_grab_pos)
 			right_hand_state = HandState.GRABBING
+			if _right_vine:
+				_right_vine.update_grab_target(_net_right_grab_pos)
 		elif right_hand_state == HandState.GRABBING:
 			right_hand.release()
 			right_hand_state = HandState.FREE
@@ -576,10 +617,18 @@ func _process(delta: float) -> void:
 		var _r_grab := right_hand_state == HandState.GRABBING
 		var stacks : int = int(_effect_stacks.get(_active_buff, 0)) if _active_buff != "" else 0
 		var time_left : float = float(_effect_timers.get(_active_buff, 0.0)) if _active_buff != "" else 0.0
+		var l_vine_path: NodePath = ^""
+		if _l_grab and _left_vine:
+			l_vine_path = get_path_to(_left_vine)
+		var r_vine_path: NodePath = ^""
+		if _r_grab and _right_vine:
+			r_vine_path = get_path_to(_right_vine)
+			
 		rpc("_rpc_sync_transform", global_position, rotation.y, head.rotation.x,
 			_l_grab, left_hand._grab_world if _l_grab else Vector3.ZERO,
 			_r_grab, right_hand._grab_world if _r_grab else Vector3.ZERO,
-			_active_buff, int(stacks), float(time_left))
+			_active_buff, int(stacks), float(time_left),
+			l_vine_path, r_vine_path)
 
 	_tick_hunger(delta)
 	# Stream live countdown to HUD every frame while the timer is running.
@@ -704,6 +753,12 @@ func _handle_push() -> void:
 			elif _can_use_edge_push_assist():
 				push_dirs.append(_edge_assist_push_dir(left_hand_ray))
 				_left_cooldown = push_cooldown
+			else:
+				var sky_push := -head.global_transform.basis.z.normalized()
+				push_dirs.append(sky_push)
+				_left_cooldown = push_cooldown
+				left_hand.grab(left_hand.global_position - sky_push * 2.0)
+				get_tree().create_timer(0.15).timeout.connect(func(): if left_hand_state == HandState.FREE: left_hand.release())
 
 	if Input.is_action_just_pressed("push_right") and not _right_consumed:
 		if right_hand_state == HandState.FREE and _right_cooldown <= 0.0:
@@ -713,6 +768,12 @@ func _handle_push() -> void:
 			elif _can_use_edge_push_assist():
 				push_dirs.append(_edge_assist_push_dir(right_hand_ray))
 				_right_cooldown = push_cooldown
+			else:
+				var sky_push := -head.global_transform.basis.z.normalized()
+				push_dirs.append(sky_push)
+				_right_cooldown = push_cooldown
+				right_hand.grab(right_hand.global_position - sky_push * 2.0)
+				get_tree().create_timer(0.15).timeout.connect(func(): if right_hand_state == HandState.FREE: right_hand.release())
 
 	if push_dirs.is_empty():
 		return
@@ -1554,7 +1615,8 @@ func _rpc_die() -> void:
 @rpc("any_peer", "unreliable_ordered", "call_remote")
 func _rpc_sync_transform(pos: Vector3, rot_y: float, head_x: float,
 		l_grab: bool, l_grab_pos: Vector3, r_grab: bool, r_grab_pos: Vector3,
-		active_buff: String, active_stacks: int, active_time_left: float) -> void:
+		active_buff: String, active_stacks: int, active_time_left: float,
+		l_vine_path: NodePath = ^"", r_vine_path: NodePath = ^"") -> void:
 	_net_pos    = pos
 	_net_rot_y  = rot_y
 	_net_head_x = head_x
@@ -1562,6 +1624,24 @@ func _rpc_sync_transform(pos: Vector3, rot_y: float, head_x: float,
 	_net_right_grab = r_grab
 	_net_left_grab_pos = l_grab_pos
 	_net_right_grab_pos = r_grab_pos
+	
+	if l_vine_path != ^"" and has_node(l_vine_path):
+		var node = get_node(l_vine_path)
+		if node is VineLink:
+			_left_vine = node.root_vine
+		else:
+			_left_vine = node as Vine
+	else:
+		_left_vine = null
+		
+	if r_vine_path != ^"" and has_node(r_vine_path):
+		var node = get_node(r_vine_path)
+		if node is VineLink:
+			_right_vine = node.root_vine
+		else:
+			_right_vine = node as Vine
+	else:
+		_right_vine = null
 	if active_buff != "" and active_time_left > 0.0:
 		var buff_changed := _active_buff != active_buff
 		_active_buff = active_buff

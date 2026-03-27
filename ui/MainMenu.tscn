@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://dmrvmic20ih2h"]
 
 [ext_resource type="Script" uid="uid://c6r3f8w16fual" path="res://ui/main_menu.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://bn8jtktnxxhg2" path="res://components/Player.tscn" id="2"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -71,13 +72,16 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6480665, 3.0742502, 0.6206
 omni_range = 10.0
 
 [node name="Platform" type="MeshInstance3D" parent="." unique_id=59471519]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.0733328, 0.052723825, -5.7062297)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.0733328, 0.052723825, -5.875393)
 mesh = SubResource("CylinderMesh_plat")
 skeleton = NodePath("../MonkeyPivot")
 surface_material_override/0 = SubResource("mat_plat")
 
 [node name="MonkeyPivot" type="Node3D" parent="." unique_id=1204397523]
 transform = Transform3D(0.7, 0, 0, 0, 0.7, 0, 0, 0, 0.7, -3.0894082, 1.5974896, -5.8058496)
+
+[node name="Player" parent="MonkeyPivot" unique_id=1082209069 instance=ExtResource("2")]
+transform = Transform3D(-1.8211756, 0, -0.35598016, 0, 1.8556406, 0, 0.35598016, 0, -1.8211756, -0.10016282, -1.7947453, -0.5124277)
 
 [node name="TitleCard" type="Node3D" parent="." unique_id=1357945302]
 transform = Transform3D(-0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, -0.707107, -4, 0, -3)
@@ -87,7 +91,7 @@ size = Vector2i(480, 640)
 render_target_update_mode = 3
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="TitleCard" unique_id=4129583]
-transform = Transform3D(1.8649601, 0, -0.42600262, 0, 1.9129962, 0, 0.42600262, 0, 1.8649601, -3.0235898, 4.4309955, 2.3926578)
+transform = Transform3D(1.8649601, 0, -0.42600262, 0, 1.9129962, 0, 0.42600262, 0, 1.8649601, -2.856971, 4.4309955, 1.663232)
 mesh = SubResource("quad_title")
 surface_material_override/0 = SubResource("StandardMaterial3D_title")
 

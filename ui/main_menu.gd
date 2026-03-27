@@ -85,6 +85,11 @@ var _sens_lbl          : Label    = null
 
 
 func _ready() -> void:
+	if has_node("/root/GameSettings"):
+		var gs := get_node("/root/GameSettings")
+		_hat_index = gs.hat_index
+		_suit_index = gs.suit_index
+		
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_title_card_node = _ensure_card_node(_title_card_node, Section.TITLE, TITLE_VP_SIZE, TITLE_QUAD_SIZE)
 	_main_card_node = _ensure_card_node(_main_card_node, Section.MAIN, CARD_VP_SIZE, CARD_QUAD_SIZE)
@@ -144,95 +149,58 @@ func _process(delta: float) -> void:
 # ══════════════════════════════════════════════════════════════════════════════
 
 func _setup_monkey() -> void:
-	var monke_scene := load("res://models/monke.glb") as PackedScene
-	if not monke_scene:
+	var monke = monkey_pivot.get_node_or_null("Player")
+	if not monke:
 		return
-	var monke := monke_scene.instantiate()
-	monkey_pivot.add_child(monke)
-	if monke is Node3D:
+
+	# Strip unneeded gameplay components since it's now in the scene directly
+	for node_path in ["Head/Camera3D", "Head/LeftHand", "Head/RightHand", "Head/LeftHandRay", "Head/RightHandRay", "Head/VineRay", "HUD", "PauseMenu", "CollisionShape3D", "HungerDeathTimer"]:
+		var n = monke.get_node_or_null(node_path)
+		if n:
+			n.free()
+
+	if monke is Node:
+		monke.set_process(false)
+		monke.set_physics_process(false)
 		_monke_visual = monke as Node3D
-		_sync_preview_cosmetics_from_player_scene()
 		_monke_neutral_rot_x = _monke_visual.rotation.x
 		_monke_neutral_rot_y = _monke_visual.rotation.y
-	var tex := load("res://models/monke_texture.png") as Texture2D
-	if tex:
-		for child in monke.get_children():
-			if child is MeshInstance3D:
-				var mat := StandardMaterial3D.new()
-				mat.albedo_texture = tex
-				mat.roughness = 0.5
-				child.material_override = mat
-	_apply_customize_visuals()
-
-
-func _sync_preview_cosmetics_from_player_scene() -> void:
-	if _monke_visual == null:
-		return
-
-	var dst_cosmetics := _preview_cosmetics_root()
-	if dst_cosmetics == null:
-		return
-
-	var player_scene := load("res://components/Player.tscn") as PackedScene
-	if player_scene == null:
-		return
-
-	var player_preview := player_scene.instantiate()
-	if player_preview == null:
-		return
-
-	var src_cosmetics := player_preview.get_node_or_null("Head/Cosmetics") as Node3D
-	if src_cosmetics == null:
-		src_cosmetics = player_preview.get_node_or_null("Cosmetics") as Node3D
-	if src_cosmetics == null:
-		player_preview.queue_free()
-		return
-
-	for group_name in ["Hats", "Suits", "Bodies"]:
-		var src_group := src_cosmetics.get_node_or_null(group_name) as Node3D
-		if src_group == null:
-			continue
-
-		var dst_group := dst_cosmetics.get_node_or_null(group_name) as Node3D
-		if dst_group == null:
-			dst_group = Node3D.new()
-			dst_group.name = group_name
-			dst_cosmetics.add_child(dst_group)
-
-		for old_child in dst_group.get_children():
-			old_child.queue_free()
-
-		for src_child in src_group.get_children():
-			if src_child is Node3D:
-				var copied := (src_child as Node3D).duplicate()
-				copied.visible = false
-				dst_group.add_child(copied)
 
 	var hat_count := _scene_cosmetic_count("Hats")
-	if hat_count > 0 and (_hat_index < 0 or _hat_index >= hat_count):
+	# Allow NO hat (-1) to persist. Only reset if it's out of upper bounds.
+	if hat_count > 0 and _hat_index >= hat_count:
 		_hat_index = 0
 	var suit_count := _scene_cosmetic_count("Suits")
 	if suit_count > 0 and _suit_index >= suit_count:
 		_suit_index = 0
 
-	player_preview.queue_free()
+	var tex := load("res://models/monke_texture.png") as Texture2D
+	if tex:
+		var mesh = monke.get_node_or_null("Torso") as MeshInstance3D
+		if mesh:
+			var mat := StandardMaterial3D.new()
+			mat.albedo_texture = tex
+			mat.roughness = 0.5
+			mesh.material_override = mat
+
+	_apply_customize_visuals()
 
 
 func _preview_cosmetics_root() -> Node3D:
 	if _monke_visual == null:
 		return null
 
-	var head_node := _monke_visual.get_node_or_null("Head") as Node3D
-	if head_node == null:
-		head_node = _monke_visual.find_child("Head", true, false) as Node3D
+	var torso_node := _monke_visual.get_node_or_null("Torso") as Node3D
+	if torso_node == null:
+		torso_node = _monke_visual.find_child("Torso", true, false) as Node3D
 
-	if head_node != null:
-		var head_cosmetics := head_node.get_node_or_null("Cosmetics") as Node3D
-		if head_cosmetics == null:
-			head_cosmetics = Node3D.new()
-			head_cosmetics.name = "Cosmetics"
-			head_node.add_child(head_cosmetics)
-		return head_cosmetics
+	if torso_node != null:
+		var torso_cosmetics := torso_node.get_node_or_null("Cosmetics") as Node3D
+		if torso_cosmetics == null:
+			torso_cosmetics = Node3D.new()
+			torso_cosmetics.name = "Cosmetics"
+			torso_node.add_child(torso_cosmetics)
+		return torso_cosmetics
 
 	var root_cosmetics := _monke_visual.get_node_or_null("Cosmetics") as Node3D
 	if root_cosmetics == null:
@@ -312,7 +280,7 @@ func _update_monkey_mouse_look(delta: float) -> void:
 	var delta_y : float = target_euler.y - anchor_euler.y
 	var delta_x : float = target_euler.x - anchor_euler.x
 	var target_y : float = _monke_neutral_rot_y - delta_y + MONKE_LOOK_BACK_OFFSET
-	var target_x : float = clampf(_monke_neutral_rot_x - delta_x, -MONKE_LOOK_PITCH_MAX, MONKE_LOOK_PITCH_MAX)
+	var target_x : float = clampf(_monke_neutral_rot_x + delta_x, -MONKE_LOOK_PITCH_MAX, MONKE_LOOK_PITCH_MAX)
 	_monke_visual.rotation.x = lerpf(_monke_visual.rotation.x, target_x, delta * MOUSE_LOOK_SPEED)
 	_monke_visual.rotation.y = lerp_angle(_monke_visual.rotation.y, target_y, delta * MOUSE_LOOK_SPEED)
 
@@ -936,4 +904,10 @@ func _cycle_model(model_type: String, direction: int) -> void:
 		_face_index = posmod(_face_index + direction, body_count)
 	else:
 		return
+		
+	if has_node("/root/GameSettings"):
+		var gs := get_node("/root/GameSettings")
+		gs.hat_index = _hat_index
+		gs.suit_index = _suit_index
+		
 	_apply_customize_visuals()

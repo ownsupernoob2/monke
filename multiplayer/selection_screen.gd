@@ -768,13 +768,8 @@ func _populate_leaderboard() -> void:
 			if auto_lbl:
 				auto_lbl.visible = false
 
-			# Continuous 360° spin + up/down tilt (showcase turntable).
-			var spin_tw := create_tween().set_loops()
-			spin_tw.tween_property(puppet, "rotation:y", PI + TAU, 5.0).from(PI)
-			var tilt_tw := create_tween().set_loops()
-			tilt_tw.tween_property(puppet, "rotation:x", 0.35, 1.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			tilt_tw.tween_property(puppet, "rotation:x", -0.35, 1.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			tilt_tw.tween_property(puppet, "rotation:x", 0.0, 1.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			# Puppet faces camera, stationary.
+			# Removed continuous spin/tilt as requested.
 
 		# Rank + info as separate viewport cards (2D text rendered onto quads).
 		var rank_col := Color(1.0, 0.9, 0.3) if i == 0 else Color(0.95, 0.95, 1.0)
@@ -804,6 +799,7 @@ func _create_text_card(parent: Node3D, text: String, vp_size: Vector2,
 	var lbl := Label.new()
 	lbl.text = text
 	lbl.size = vp_size
+	lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -816,11 +812,11 @@ func _create_text_card(parent: Node3D, text: String, vp_size: Vector2,
 	var quad := MeshInstance3D.new()
 	var qm := QuadMesh.new()
 	qm.size = world_size
-	qm.flip_faces = true
+	qm.flip_faces = false
 	quad.mesh = qm
 	var mat := StandardMaterial3D.new()
 	mat.albedo_texture = vp.get_texture()
-	mat.uv1_scale = Vector3(-1, 1, 1)
+	mat.uv1_scale = Vector3(1, 1, 1)
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED

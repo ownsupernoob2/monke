@@ -30,6 +30,8 @@ func lps_clear() -> void:
 
 # ── Player ──────────────────────────────────────────────────
 var player_name : String = ""
+var hat_index : int = -1
+var suit_index : int = -1
 
 # ── Disconnect message (shown on main menu after kick/host-leave) ───────────
 var disconnect_message : String = ""
